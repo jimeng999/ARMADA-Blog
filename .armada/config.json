@@ -1,0 +1,16 @@
+{
+  "triggerLabel": "armada",
+  "dispatch": "shipwright",
+  "baseBranch": "main",
+  "authors": "",
+  "autoMerge": false,
+  "mergeMethod": "squash",
+  "maxReviewRounds": 2,
+  "armadaRepo": "calumjs/ARMADA",
+  "autoArmSelfFixes": false,
+  "commands": {
+    "build": "npm run build:local",
+    "lint": "npx astro check",
+    "run": "npm run dev"
+  }
+}
