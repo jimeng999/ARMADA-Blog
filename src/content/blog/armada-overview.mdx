@@ -1,0 +1,37 @@
+---
+title: Meet ARMADA, a fleet that ships your backlog
+description: ARMADA is a fleet of Claude Code skills that watch a GitHub backlog and drive each issue from label to merge-ready pull request, whatever your stack.
+pubDate: 2026-06-05T09:00:00.000Z
+heroImage: /blog-placeholder-1.jpg
+---
+
+Most automation around a backlog stops at triage. It can label an issue, suggest a fix, or draft a comment, but a human still has to open the editor, write the code, run the tests, and raise the pull request. ARMADA is built to close that gap. It is a fleet of Claude Code skills that watch a GitHub backlog and carry each issue all the way to a merge-ready pull request.
+
+ARMADA stands for **Autonomous Recursive Multi-Agent Development Assembler**. The name is a mouthful, but the idea is simple: instead of one large agent trying to do everything, you get a small fleet of focused skills, each with a clear job, coordinated by a lookout that watches the work and dispatches it.
+
+## What ARMADA actually does
+
+Drop the trigger label on a GitHub issue and the fleet takes over:
+
+1. **The lookout spots it.** A scheduler watches the backlog and the open pull requests at the same time.
+2. **A builder picks it up.** It researches the issue, plans the change, and implements it in an isolated git worktree so parallel work never collides.
+3. **A reviewer inspects the result.** When the pull request opens, it is reviewed through more than one lens before anyone merges.
+4. **The loop closes.** Validation runs the project's own build, test, and lint commands, and the change moves toward a gated merge.
+
+The path from `issue` to `build` to `review` to `PR` is the spine of the whole system, and every skill in the fleet plays one part of it.
+
+## Stack-agnostic by design
+
+ARMADA does not assume a language or framework. It discovers the project's build, test, and lint commands during setup and runs whatever the repo configures. A Node site, a Rust crate, a .NET service, and a Python package all flow through the same fleet, because the fleet orchestrates git, GitHub, and your project's own commands rather than baking any one toolchain in.
+
+## A fleet, not a monolith
+
+Each skill is named for the part of a ship's crew it stands in for, which makes the fleet easy to reason about:
+
+- **commission** sets the repository up so the rest of the fleet can sail.
+- **charter** turns a rough request into a well-formed, armed issue.
+- **crows-nest** is the lookout that watches and dispatches the work.
+- **shipwright** is the builder that takes one issue to a pull request.
+- **muster** is the inspection that reviews a pull request before it sails.
+
+The rest of this series introduces each of those shipped skills in turn, starting with the one every other skill depends on: [commission](/blog/commission-the-setup-skill/).

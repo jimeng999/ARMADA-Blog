@@ -1,0 +1,36 @@
+---
+title: Shipwright, the builder that takes an issue to a PR
+description: Shipwright works a single GitHub issue end-to-end in an isolated worktree, researching, planning, implementing, validating, and opening a pull request.
+pubDate: 2026-06-05T09:40:00.000Z
+heroImage: /blog-placeholder-5.jpg
+---
+
+When the lookout spots a labelled issue, it needs somewhere to send it. That somewhere is `shipwright`, the fleet's builder. Its job is narrow and complete at the same time: take one GitHub issue and carry it all the way to an open pull request.
+
+## End to end on a single issue
+
+`shipwright` does not just write code. It works the issue through the full arc a careful engineer would:
+
+1. **Research.** It reads the issue, the project docs, and the existing code in the affected area to understand the patterns and constraints before touching anything.
+2. **Plan.** It lays out the approach, the files it will change, and how each acceptance criterion will be met.
+3. **Implement.** It makes the change in small, logical commits, matching the conventions of the surrounding code rather than inventing new ones.
+4. **Validate.** It runs the project's own build, test, and lint commands and checks the output before going further.
+5. **Open the pull request.** It writes a structured pull request body, links the issue so the issue closes on merge, and arms the pull request for review.
+
+## Isolated worktrees keep work from colliding
+
+The detail that makes parallel building possible is the isolated git worktree. `shipwright` builds each issue in its own worktree rather than in the main checkout. Two builders can work two different issues at the same time without stepping on each other's files or branches, which is exactly what lets the lookout dispatch builds concurrently.
+
+## Stack-agnostic validation
+
+`shipwright` does not assume how to build or test your project. It reads the commands `commission` recorded in `.armada/config.json` and runs those. The same builder validates a Node site by running `npm` scripts, a Rust crate with `cargo`, or a .NET service with `dotnet`, because the commands come from your repo, not from the skill.
+
+## More than building
+
+`shipwright` has a second mode worth knowing about. Given a pull request and its review comments, it switches from building to addressing review: it triages each comment, agreeing, discussing, or disagreeing with a short rationale, implements the agreed changes, re-validates, and replies per thread. That is the stage the lookout dispatches after a review pass.
+
+## When it runs
+
+You point `shipwright` at work with phrases like "work on issue", "build this issue", "implement #123", or a free-text description. It is also the default target the lookout dispatches to.
+
+Once a pull request is open, it should not merge unseen. The inspection that stands between a fresh pull request and the base branch is [muster](/blog/muster-the-review/).

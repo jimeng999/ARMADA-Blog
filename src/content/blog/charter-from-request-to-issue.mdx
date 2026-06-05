@@ -1,0 +1,34 @@
+---
+title: Charter, from rough request to armed issue
+description: Charter turns a one-line ask into a well-formed GitHub issue with concrete acceptance criteria, then arms it so the fleet picks it up automatically.
+pubDate: 2026-06-05T09:20:00.000Z
+heroImage: /blog-placeholder-3.jpg
+---
+
+A vague request is the enemy of automation. "Make the login faster" gives a builder nothing testable to aim at, and nothing to know when it is done. `charter` exists to fix that at the source. It takes a rough request and turns it into a structured, fleet-ready GitHub issue, then arms that issue so the rest of the fleet picks it up with no extra step.
+
+## What a good charter produces
+
+`charter` does not just file a ticket. It drafts an issue that follows issue best practices and the repository's house style, with the parts a builder actually needs:
+
+- **An imperative title** that says what the change is.
+- **A problem and goal** that frame why the work matters.
+- **Concrete, testable acceptance criteria** so there is an unambiguous definition of done.
+- **Scope and non-goals** that keep the change focused.
+- **Dependencies and notes** that capture anything the builder should know up front.
+
+Before anything is created, `charter` confirms the draft with you, so you stay in control of what enters the backlog.
+
+## Arming the work
+
+Creating the issue is only half the job. By default, `charter` also adds the trigger label from `.armada/config.json` to the new issue. That label is what the lookout watches for, so arming the issue is what actually hands it to the fleet. The result is a single step from "I have an idea" to "the fleet is building it".
+
+## How it differs from commission
+
+It is easy to confuse the two setup-adjacent skills, so the line is worth drawing clearly. `commission` sets the *repository* up once. `charter` authors and arms the *work* that flows into the fleet afterwards. One prepares the port; the other loads the cargo.
+
+## When it runs
+
+You reach for `charter` whenever you would otherwise open a GitHub issue by hand: "create an issue", "file a backlog item", "raise a ticket", "draft an issue", or the direct invocation. The payoff is consistency, every issue the fleet builds starts from the same well-formed shape.
+
+Once an armed issue is sitting in the backlog, something has to notice it. That something is [crows-nest](/blog/crows-nest-the-lookout/), the fleet's lookout.
