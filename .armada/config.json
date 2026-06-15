@@ -10,6 +10,7 @@
   "maxConcurrentReviews": 3,
   "armadaRepo": "calumjs/ARMADA",
   "autoArmSelfFixes": false,
+  "logbook": "all",
   "commands": {
     "build": "npm run build:local",
     "lint": "npx astro check",
