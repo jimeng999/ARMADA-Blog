@@ -1,66 +1,66 @@
 ---
-seoTitle: About Northwind Traders
+seoTitle: About
 blocks:
   - _template: split
-    title: A trading house built on relationships
+    title: Editing that happens in context
     body: |
-      Northwind Traders began at a single market stall, importing a handful of cheeses and preserves we could not stop talking about. The shopkeepers who bought from us kept asking what else we could find — and the answer kept growing.
+      Tina renders your real site, then lets you click any heading, paragraph, or image and change it in place. What you edit is exactly what visitors see - no separate preview, no guesswork.
 
-      Today we source from farmhouses, roasters, and family producers across four continents, but the work is the same as it was on day one: find the people making something exceptional, and get it to the counter intact.
+      Behind the scenes every change is a commit, so your content has the same history, branches, and review as the rest of your codebase.
     image:
       src: /blog-placeholder-about.jpg
-      alt: The Northwind Traders sourcing team at a producer's farm
+      alt: The TinaCMS visual editor
     actions:
-      - label: See what is in season
+      - label: See it in action
         type: button
         icon: player-play
-        link: /blog
+        link: 'https://tina.io/docs/getting-started/overview/'
   - _template: content
     body: |
-      ## Provenance you can trust
+      ## Content management, the way it should be
 
-      A specialty food is only as good as the story behind it, and that story is easy to lose somewhere between the maker and the shelf. We buy direct so we can stand behind every line — who made it, where, and how.
+      Tina exists to settle an old argument. Developers want control, editors want simplicity, and for years a CMS made you choose one or the other. We never accepted that trade-off.
 
-      That means fair prices for the producers we work with, full traceability for the grocers and chefs who buy from us, and a pantry of goods that taste the way the maker intended.
+      So we built a CMS on top of the tools developers already trust - Git and Markdown - and gave content creators a live, visual way to work inside them. No proprietary database. No content held hostage. Just your words, in your repository, editable by anyone on the team.
   - _template: callout
-    text: Family-owned since 1986 — still sourcing the same way, one producer at a time
-    url: /blog/our-story-forty-years-of-fine-food
+    text: Open source and Apache 2.0 licensed - shaped in the open with our community
+    url: 'https://github.com/tinacms/tinacms'
   - _template: features
     title: What we stand for
-    description: A few convictions that shape every supplier we take on.
+    description: A few convictions that shape every decision we make.
     items:
       - icon: code
-        title: Sourced direct
+        title: Developer-first
         text: |
-          We buy straight from the makers, not through faceless wholesalers, so provenance and fair pricing are built in rather than bolted on.
+          Define your schema in TypeScript and wire up the editor exactly how you want it. Tina bends to your stack, not the other way around.
       - icon: wand
-        title: Handled with care
+        title: Editor-friendly
         text: |
-          Temperature-controlled shipping and short lead times mean delicate, perishable goods arrive at their peak, every time.
+          In-context visual editing means content creators see changes as they make them - no config files, no guesswork.
       - icon: lock-open
-        title: Seasonal, not generic
+        title: No lock-in, ever
         text: |
-          Our range follows the harvests and the makers' calendars, so what is on the list is what is genuinely at its best right now.
+          Your content lives in your repo as plain Markdown. Walk away whenever you like and take all of it with you.
   - _template: stats
-    title: Four decades of fine food
-    description: The numbers behind the catalogue.
+    title: Built on principles, not lock-in
+    description: The numbers that actually matter to us.
     stats:
-      - stat: '1986'
-        type: Family-owned and trading ever since
-      - stat: '1,200+'
-        type: Gourmet lines from makers we know
-      - stat: 4
-        type: Continents we source from
+      - stat: 100%
+        type: Open source, Apache 2.0 licensed
+      - stat: '0'
+        type: Databases to manage or migrate
+      - stat: Git
+        type: Your single source of truth
   - _template: cta
-    title: Become a stockist
-    description: 'Open a trade account to order from the full catalogue, or browse the journal to see what is arriving this season.'
+    title: Help shape what comes next
+    description: 'Tina is open source and built in the open. Read the docs, join the conversation, and help define the future of Git-based content.'
     actions:
-      - label: Open a trade account
+      - label: Read the Docs
         type: button
         icon: book
-        link: 'https://www.example.com/trade'
-      - label: Browse the journal
+        link: 'https://tina.io/docs/'
+      - label: Join the Community
         type: link
         icon: brand-discord
-        link: /blog
+        link: 'https://tina.io/community/'
 ---

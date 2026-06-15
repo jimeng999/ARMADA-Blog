@@ -1,0 +1,30 @@
+---
+title: Commission, the skill that readies the repo
+description: Before any ARMADA skill can sail, commission detects your build commands, writes the fleet config, and creates the labels the lookout watches for.
+pubDate: 2026-06-05T09:10:00.000Z
+heroImage: /blog-placeholder-2.jpg
+---
+
+Every fleet needs a port before it can sail. In ARMADA that port is `commission`, the one-time setup skill that every other skill depends on. It is the first thing you run in a repository, and because it is idempotent, it is safe to run again whenever something drifts.
+
+## What it sets up
+
+ARMADA stays out of your project's business by discovering how your project already works rather than imposing a convention. `commission` does that discovery and records it:
+
+- **Detects your commands.** It inspects the repo for the build, test, lint, format, and run commands the rest of the fleet will use, reading `package.json` scripts, a `Makefile`, a `*.csproj`, a `Cargo.toml`, or a `pyproject.toml` as appropriate.
+- **Picks the base branch.** It works out which branch new work should target so builders branch from the right place.
+- **Writes the config.** All of this lands in `.armada/config.json`, the single file the fleet reads to learn how to operate in your repository.
+- **Creates the labels.** It creates the GitHub trigger label and the state labels the lookout uses to track each issue and pull request.
+- **Checks your access.** It confirms the GitHub CLI is authenticated, so later skills do not fail halfway through an operation.
+
+When it finishes, it prints how to arm the lookout's watch, so you know the exact next step.
+
+## When it runs
+
+You trigger `commission` by saying something like "commission armada", "set up armada", or "get armada ready", or by invoking it directly. It also runs automatically: if the lookout or a builder discovers the repository was never commissioned, they invoke it first rather than failing. Because it is idempotent, re-running it to pick up a new command or repair a missing label is always safe.
+
+## Why it matters
+
+`commission` is what makes the rest of the fleet stack-agnostic. By recording your project's real commands in `.armada/config.json` once, it lets every later skill validate work by running *your* build and *your* tests, with no assumption about language baked in. Get the port right, and the rest of the voyage follows.
+
+With the repository commissioned, the next step is putting work into the fleet, which is the job of [charter](/blog/charter-from-request-to-issue/).

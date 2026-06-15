@@ -1,0 +1,33 @@
+---
+title: Crows-nest, the lookout that watches it all
+description: Crows-nest is ARMADA's parallel scheduler, watching new issues and ready pull requests at once and dispatching every independent unit of work concurrently.
+pubDate: 2026-06-05T09:30:00.000Z
+heroImage: /blog-placeholder-4.jpg
+---
+
+A fleet is only as good as its lookout. In ARMADA that lookout is `crows-nest`: a single, maximally parallel scheduler that watches a GitHub repository and dispatches the work the rest of the fleet carries out. It is the skill you leave running, and it is what makes the whole system feel autonomous.
+
+## Two tracks, watched at once
+
+`crows-nest` keeps an eye on two tracks of work at the same time:
+
+- **A new-issue track.** Every issue that carries the trigger label is dispatched into the fleet to be built.
+- **A ready-PR track.** Every labelled pull request is driven through a pipeline: review, then address the feedback, then re-validate, then a gated merge.
+
+Because it watches both at once, a freshly opened pull request and a brand-new issue can move forward in the same tick, rather than waiting in separate queues.
+
+## Maximally parallel, safely serialised
+
+`crows-nest` runs as a recurring watch. Each tick scans both tracks in one batched pass, builds a dependency and conflict graph across them, and then dispatches every independent runnable unit at once, builds and reviews together, up to a configured bound.
+
+The important word is *independent*. It only serialises work where a true dependency or a file-level conflict forces it. Two issues that touch unrelated files build in parallel; two that would edit the same file are ordered so they do not collide. The result is throughput without chaos.
+
+## Gated, not reckless
+
+Running a scheduler that can merge pull requests sounds risky, so the gate is deliberate. The only consequential action in the ready-PR pipeline, the final merge, is controlled by an `autoMerge` setting that defaults to off. Review and address never merge on their own. A human stays in the loop on the one decision that matters, while everything leading up to it runs on its own.
+
+## When it runs
+
+You start the lookout with phrases like "watch for issues", "start the crows-nest", "man the lookout", or "review and merge PRs", optionally giving it a trigger label and a poll interval. From then on it is the engine that turns a labelled backlog into a steady stream of dispatched work.
+
+What it dispatches a new issue to is the builder, [shipwright](/blog/shipwright-the-builder/).

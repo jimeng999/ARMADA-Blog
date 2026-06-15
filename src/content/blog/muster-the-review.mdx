@@ -1,0 +1,31 @@
+---
+title: Muster, the inspection before a PR sails
+description: Muster reviews a pull request through two independent lenses at once, consolidates the findings, and posts them as inline comments plus a summary.
+pubDate: 2026-06-05T09:50:00.000Z
+heroImage: /blog-placeholder-about.jpg
+---
+
+No ship leaves harbour without an inspection. In ARMADA that inspection is `muster`, the skill that reviews an open pull request before it is allowed to sail. It is the review stage the lookout dispatches inside its ready-PR pipeline, and it is what keeps autonomous building from turning into autonomous merging of unreviewed code.
+
+## Two lenses, run in parallel
+
+A single reviewer has a single set of blind spots, so `muster` reviews each pull request through two independent lenses at the same time:
+
+- **A conventions and correctness pass** that checks the diff against the project's conventions and looks for correctness problems.
+- **A root-cause second opinion** that looks past the surface of the change for deeper issues a line-by-line read might miss.
+
+Running both in parallel means the review is both fast and less likely to wave through a subtle problem.
+
+## Consolidated, not duplicated
+
+Two reviewers can raise the same concern twice. `muster` consolidates and de-duplicates the findings from both passes before it posts anything, so you get one clean set of comments rather than two overlapping ones. It then posts the findings as inline review comments on the relevant lines, plus a top-level summary that gives the overall picture.
+
+## Findings the fleet can act on
+
+`muster` does not only post comments for humans. It returns the findings as structured data, which is what lets the rest of the fleet act on them automatically. After a review, the lookout can hand those findings to the builder's address-review mode, which triages each comment and implements the agreed changes, closing the review loop without a human having to relay anything.
+
+## When it runs
+
+You trigger `muster` with phrases like "muster", "review this PR", "inspect the diff", or "review PR #123", optionally giving it a review effort level. It also runs automatically as the review stage inside the lookout's ready-PR pipeline.
+
+`muster` is the last skill in this tour of the shipped fleet. Together with [commission](/blog/commission-the-setup-skill/), [charter](/blog/charter-from-request-to-issue/), [crows-nest](/blog/crows-nest-the-lookout/), and [shipwright](/blog/shipwright-the-builder/), it completes the loop from a labelled issue to a reviewed, merge-ready pull request. For the bigger picture of how they fit together, start back at the [ARMADA overview](/blog/armada-overview/).
