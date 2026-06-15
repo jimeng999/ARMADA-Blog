@@ -1,24 +1,147 @@
 ---
 import { Icon } from 'astro-icon/components';
+
+// Preset themes offered by the picker. The `icon`/`label` drive the menu UI;
+// applying a theme (base .dark class + data-theme attribute) is handled by the
+// shared inline script below and mirrors the THEMES registry in BaseHead.astro
+// and the CSS-variable blocks in global.css. Keep all three in sync.
+const themes = [
+	{ id: 'light', label: 'Day at sea', icon: 'tabler:sun' },
+	{ id: 'dark', label: 'Night voyage', icon: 'tabler:moon' },
+	{ id: 'storm', label: 'Tempest watch', icon: 'tabler:bolt' },
+	{ id: 'tropical', label: 'Tropical lagoon', icon: 'tabler:sun-high' },
+];
+
+// SSR/no-JS fallback: with JS disabled the picker's active marker is set by the
+// inline script below, so server-render the SSR default ('light' — matches
+// BaseHead.astro's resolve() fallback) as checked so a themed-but-script-less
+// page still indicates an active option. The script reconciles this with the
+// persisted theme as soon as it runs.
+const ssrDefaultTheme = 'light';
 ---
-<button
-	data-theme-toggle
-	type="button"
-	aria-label="Toggle color theme"
-	class="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
->
-	<Icon name="tabler:sun" class="hidden size-5 dark:block" />
-	<Icon name="tabler:moon" class="block size-5 dark:hidden" />
-</button>
+<div class="relative" data-theme-menu>
+	<button
+		data-theme-toggle
+		type="button"
+		aria-label="Choose colour theme"
+		aria-haspopup="true"
+		aria-expanded="false"
+		class="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+	>
+		<Icon name="tabler:palette" class="size-5" />
+	</button>
+	<div
+		data-theme-panel
+		role="radiogroup"
+		aria-label="Colour theme"
+		hidden
+		class="absolute right-0 z-30 mt-2 min-w-44 overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-lg"
+	>
+		{themes.map((theme) => (
+			<button
+				type="button"
+				role="radio"
+				aria-checked={theme.id === ssrDefaultTheme ? 'true' : 'false'}
+				data-theme-option={theme.id}
+				class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground aria-checked:font-semibold aria-checked:text-primary outline-none focus-visible:bg-accent"
+			>
+				<Icon name={theme.icon} class="size-4 shrink-0" aria-hidden="true" />
+				<span class="flex-1">{theme.label}</span>
+				<Icon name="tabler:check" class={`size-4 shrink-0 ${theme.id === ssrDefaultTheme ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true" data-theme-check />
+			</button>
+		))}
+	</div>
+</div>
 <script is:inline>
-	// Delegate from document so the handler survives DOM swaps from
-	// Astro's ClientRouter and Tina's visual-editor re-renders.
+	// Delegate from document so the handlers survive DOM swaps from Astro's
+	// ClientRouter and Tina's visual-editor re-renders.
 	if (!window.__themeToggleBound) {
 		window.__themeToggleBound = true;
-		document.addEventListener('click', (e) => {
-			if (!e.target.closest('[data-theme-toggle]')) return;
-			const isDark = document.documentElement.classList.toggle('dark');
-			localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+		// Mirrors BaseHead.astro's THEMES registry: base mode + scoping attr.
+		var THEMES = {
+			light:    { dark: false, attr: null },
+			dark:     { dark: true,  attr: null },
+			storm:    { dark: true,  attr: 'storm' },
+			tropical: { dark: false, attr: 'tropical' },
+		};
+
+		function current() {
+			try {
+				var stored = localStorage.getItem('theme');
+				if (stored && THEMES[stored]) return stored;
+				if (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+			} catch (e) {}
+			return 'light';
+		}
+
+		function applyTheme(id) {
+			var t = THEMES[id] || THEMES.light;
+			var el = document.documentElement;
+			el.classList.toggle('dark', t.dark);
+			if (t.attr) el.setAttribute('data-theme', t.attr);
+			else el.removeAttribute('data-theme');
+			try { localStorage.setItem('theme', id); } catch (e) {}
+			syncChecks();
+		}
+
+		// Reflect the active theme onto every rendered menu (header + mobile).
+		function syncChecks() {
+			var active = current();
+			document.querySelectorAll('[data-theme-option]').forEach(function (opt) {
+				var on = opt.getAttribute('data-theme-option') === active;
+				opt.setAttribute('aria-checked', on ? 'true' : 'false');
+				var check = opt.querySelector('[data-theme-check]');
+				if (check) check.style.opacity = on ? '1' : '0';
+			});
+		}
+
+		function setOpen(menu, open) {
+			if (!menu) return;
+			var btn = menu.querySelector('[data-theme-toggle]');
+			var panel = menu.querySelector('[data-theme-panel]');
+			if (!btn || !panel) return;
+			btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+			panel.hidden = !open;
+		}
+
+		function closeAll() {
+			document.querySelectorAll('[data-theme-menu]').forEach(function (m) { setOpen(m, false); });
+		}
+
+		document.addEventListener('click', function (e) {
+			var option = e.target.closest('[data-theme-option]');
+			if (option) {
+				applyTheme(option.getAttribute('data-theme-option'));
+				closeAll();
+				return;
+			}
+			var toggle = e.target.closest('[data-theme-toggle]');
+			if (toggle) {
+				var menu = toggle.closest('[data-theme-menu]');
+				var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+				closeAll();
+				if (!isOpen) { setOpen(menu, true); syncChecks(); }
+				return;
+			}
+			// Click outside any menu closes them.
+			if (!e.target.closest('[data-theme-menu]')) closeAll();
 		});
+
+		document.addEventListener('keydown', function (e) {
+			if (e.key !== 'Escape') return;
+			// Restore focus to the toggle of any open menu before closing, so a
+			// keyboard user isn't dropped back to the document on Escape.
+			document.querySelectorAll('[data-theme-menu]').forEach(function (m) {
+				var btn = m.querySelector('[data-theme-toggle]');
+				var panel = m.querySelector('[data-theme-panel]');
+				if (btn && panel && !panel.hidden) btn.focus();
+			});
+			closeAll();
+		});
+
+		// Keep checkmarks accurate after no-flash apply and route swaps.
+		syncChecks();
+		document.addEventListener('astro:after-swap', syncChecks);
 	}
 </script>

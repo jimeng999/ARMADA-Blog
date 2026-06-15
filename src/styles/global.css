@@ -120,6 +120,74 @@
 	--chart-5: oklch(0.66 0.18 25);               /* signal red */
 }
 
+/* ── Preset themes ─────────────────────────────────────────────────────────
+   Additional named presets layered on top of the light/dark base via a
+   `data-theme` attribute on <html>. Each preset is *derived from a base mode*
+   (light or dark) so the existing `dark:` Tailwind variants keep working — a
+   dark-derived preset still carries the `.dark` class, a light-derived one
+   does not. The blocks below only override the CSS custom properties, so all
+   downstream tokens (`--color-*`, prose, dividers) inherit automatically and
+   nothing about the light/dark modes changes. Palettes are tuned so the key
+   foreground/background pairings clear WCAG AA (>=4.5:1 body, >=3:1 headings
+   and large UI). */
+
+/* Storm — "tempest watch": a dramatic dark squall of cold steel-slate seas,
+   pale sea-spray ink, and a charged lightning-cyan primary. Dark-derived. */
+[data-theme='storm'] {
+	--background: oklch(0.21 0.022 250);          /* slate storm sea */
+	--foreground: oklch(0.95 0.012 240);          /* pale sea-spray */
+	--card: oklch(0.26 0.026 250);                /* lifted steel hull */
+	--card-foreground: oklch(0.95 0.012 240);
+	--popover: oklch(0.26 0.026 250);
+	--popover-foreground: oklch(0.95 0.012 240);
+	--primary: oklch(0.80 0.13 210);              /* lightning cyan */
+	--primary-foreground: oklch(0.20 0.03 250);   /* slate on cyan */
+	--secondary: oklch(0.32 0.03 248);            /* weathered steel */
+	--secondary-foreground: oklch(0.95 0.012 240);
+	--muted: oklch(0.32 0.03 248);
+	--muted-foreground: oklch(0.80 0.018 240);    /* dim spray */
+	--accent: oklch(0.42 0.07 235);               /* charged blue accent */
+	--accent-foreground: oklch(0.97 0.01 240);
+	--destructive: oklch(0.68 0.19 25);           /* storm-warning red */
+	--border: oklch(0.90 0.02 240 / 16%);         /* steel rule, low alpha */
+	--input: oklch(0.90 0.02 240 / 18%);
+	--ring: oklch(0.80 0.13 210);                 /* lightning focus ring */
+	--chart-1: oklch(0.80 0.13 210);              /* lightning cyan */
+	--chart-2: oklch(0.70 0.10 250);              /* steel blue */
+	--chart-3: oklch(0.74 0.06 235);              /* pale squall */
+	--chart-4: oklch(0.72 0.10 170);              /* cold sea green */
+	--chart-5: oklch(0.68 0.19 25);               /* warning red */
+}
+
+/* Tropical — "sun-bleached lagoon": a bright, warm light preset of pale sand
+   surfaces, deep teal-ink, turquoise primary and a sun-coral accent.
+   Light-derived (no `.dark`). */
+[data-theme='tropical'] {
+	--background: oklch(0.975 0.022 95);          /* bleached sand */
+	--foreground: oklch(0.30 0.06 220);           /* deep lagoon ink */
+	--card: oklch(0.99 0.014 95);                 /* lighter sand */
+	--card-foreground: oklch(0.30 0.06 220);
+	--popover: oklch(0.99 0.014 95);
+	--popover-foreground: oklch(0.30 0.06 220);
+	--primary: oklch(0.50 0.105 200);             /* turquoise lagoon */
+	--primary-foreground: oklch(0.99 0.014 95);   /* sand on turquoise */
+	--secondary: oklch(0.92 0.05 175);            /* shallow surf */
+	--secondary-foreground: oklch(0.30 0.06 220);
+	--muted: oklch(0.93 0.035 120);               /* warm sand wash */
+	--muted-foreground: oklch(0.42 0.05 215);     /* muted lagoon */
+	--accent: oklch(0.84 0.09 55);                /* sun coral wash */
+	--accent-foreground: oklch(0.30 0.06 220);
+	--destructive: oklch(0.52 0.20 27);           /* coral red */
+	--border: oklch(0.82 0.04 170);               /* surf-coloured rule */
+	--input: oklch(0.82 0.04 170);
+	--ring: oklch(0.55 0.11 200);                 /* turquoise focus ring */
+	--chart-1: oklch(0.50 0.105 200);             /* turquoise */
+	--chart-2: oklch(0.58 0.12 55);               /* coral */
+	--chart-3: oklch(0.45 0.08 175);              /* deep teal */
+	--chart-4: oklch(0.55 0.11 145);              /* palm green */
+	--chart-5: oklch(0.52 0.20 27);               /* coral red */
+}
+
 @layer base {
 	* {
 		border-color: var(--border);
