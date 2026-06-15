@@ -1,0 +1,26 @@
+---
+import Base from '../layouts/Base.astro';
+import { getConfig } from '../lib/data';
+import GoldChart from '../components/gold/GoldChart.astro';
+
+const config = (await getConfig()).data?.config ?? null;
+---
+
+<Base
+	title={`Gold Price · ${config?.seo?.title ?? 'TinaCMS + Astro'}`}
+	description="Live gold price in Australian dollars with an interactive historical chart — a ship's-chart for the brass standard. Frontend-only, no accounts."
+>
+	<main class="mx-auto max-w-4xl px-6 py-12">
+		<header class="mb-8 flex flex-col gap-3">
+			<h1 class="text-4xl font-semibold tracking-tight">Gold Price</h1>
+			<p class="max-w-2xl text-muted-foreground">
+				A ship's-chart for the brass standard. The latest spot price of gold in
+				Australian dollars, plus an interactive history you can range across —
+				all plotted right here in your browser, no accounts and no downloads.
+			</p>
+			<hr class="rope-divider max-w-2xl" aria-hidden="true" />
+		</header>
+
+		<GoldChart />
+	</main>
+</Base>
