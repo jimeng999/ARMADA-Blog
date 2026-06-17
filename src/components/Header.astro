@@ -4,6 +4,7 @@ import { tinaField } from "@tinacms/astro/tina-field";
 import type { CmsConfig } from '../lib/data';
 import IconLink from "./IconLink.astro";
 import ThemeToggle from './ThemeToggle.astro';
+import LanguageToggle from './LanguageToggle.astro';
 
 interface Props {
 	config?: CmsConfig | null;
@@ -33,6 +34,7 @@ const contactLinks = (config?.contactLinks ?? []).filter(item => item !== null);
 				{contactLinks.map((link) => (
 					<IconLink title={link.title} link={link.link} icon={link.icon} data-tina-field={tinaField(link, "title")} />
 				))}
+				<LanguageToggle />
 				<ThemeToggle />
 			</div>
 			<button
@@ -70,6 +72,7 @@ const contactLinks = (config?.contactLinks ?? []).filter(item => item !== null);
 						<IconLink title={link.title} link={link.link} icon={link.icon} data-tina-field={tinaField(link, "title")} />
 					))}
 				</div>
+				<LanguageToggle />
 				<ThemeToggle />
 			</div>
 		</div>

@@ -1,0 +1,234 @@
+---
+import { Icon } from 'astro-icon/components';
+
+// Header "language" selector — pure client-side whimsy modelled on
+// ThemeToggle.astro. Two options: plain English (default) and English (Pirate),
+// the latter rewriting visible body text into family-friendly pirate-speak via
+// a small client-side dictionary. The swap is strictly reversible: originals are
+// cached and only text nodes are touched (skipping code/pre/inputs and any
+// [data-no-piratify] subtree). Persistence + route-survival mirror ThemeToggle.
+// Designed to extend later to more "languages" without rework.
+const languages = [
+	{ id: 'en', label: 'English', icon: 'tabler:flag' },
+	{ id: 'pirate', label: 'English (Pirate)', icon: 'tabler:skull' },
+];
+
+// SSR/no-JS fallback: the active marker is reconciled by the inline script, so
+// server-render the default ('en') as checked.
+const ssrDefaultLang = 'en';
+---
+<div class="relative" data-lang-menu>
+	<button
+		data-lang-toggle
+		type="button"
+		aria-label="Choose language"
+		aria-haspopup="true"
+		aria-expanded="false"
+		class="inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+	>
+		<Icon name="tabler:language" class="size-5" />
+	</button>
+	<div
+		data-lang-panel
+		role="radiogroup"
+		aria-label="Language"
+		hidden
+		class="absolute right-0 z-30 mt-2 min-w-44 overflow-hidden rounded-md border bg-popover py-1 text-popover-foreground shadow-lg"
+	>
+		{languages.map((lang) => (
+			<button
+				type="button"
+				role="radio"
+				aria-checked={lang.id === ssrDefaultLang ? 'true' : 'false'}
+				data-lang-option={lang.id}
+				class="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground aria-checked:font-semibold aria-checked:text-primary outline-none focus-visible:bg-accent"
+			>
+				<Icon name={lang.icon} class="size-4 shrink-0" aria-hidden="true" />
+				<span class="flex-1">{lang.label}</span>
+				<Icon name="tabler:check" class={`size-4 shrink-0 ${lang.id === ssrDefaultLang ? 'opacity-100' : 'opacity-0'}`} aria-hidden="true" data-lang-check />
+			</button>
+		))}
+	</div>
+</div>
+<script is:inline>
+	// Delegate from document so handlers survive DOM swaps from Astro's
+	// ClientRouter and Tina's visual-editor re-renders.
+	if (!window.__langToggleBound) {
+		window.__langToggleBound = true;
+
+		var LANGS = { en: true, pirate: true };
+
+		// --- Pirate dictionary -------------------------------------------------
+		// Family-friendly, whole-word replacements. Each entry preserves the
+		// original case pattern (lower / Capitalised / UPPER) when applied.
+		var DICT = {
+			hello: 'ahoy', hi: 'ahoy', hey: 'ahoy',
+			friend: 'matey', friends: 'mateys',
+			yes: 'aye', no: 'nay',
+			my: 'me', 'i’m': "I be", im: 'I be',
+			the: "th'", is: 'be', are: 'be', am: 'be',
+			you: 'ye', your: 'yer', "you’re": 'ye be', youre: 'ye be',
+			'of': "o'", and: "an'",
+			for: 'fer', to: 'ta', there: 'thar', their: 'thar',
+			money: 'doubloons', treasure: 'booty', friendly: 'matey-like',
+			stop: 'avast', look: 'ahoy', drink: 'grog', drinks: 'grog',
+			food: 'grub', man: 'matey', woman: 'lass', women: 'lasses',
+			men: 'mateys', boy: 'lad', girl: 'lass', dog: 'salty dog',
+			before: "afore", over: "o'er", small: 'wee', little: 'wee',
+			happy: 'jolly', away: 'overboard', sea: 'briny deep',
+			ship: 'vessel', boss: 'cap’n', captain: 'cap’n', sir: 'matey',
+		};
+
+		// Build a single case-insensitive, whole-word regex from the dictionary
+		// keys, longest first so multi-word/compound keys win.
+		var keys = Object.keys(DICT).sort(function (a, b) { return b.length - a.length; });
+		function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+		// \w doesn't include the curly/straight apostrophes some keys use, so we
+		// guard boundaries manually with a lookaround on letters/apostrophes.
+		var RE = new RegExp("(?<![A-Za-z’'])(" + keys.map(esc).join('|') + ")(?![A-Za-z’'])", 'gi');
+
+		function matchCase(template, replacement) {
+			if (template === template.toUpperCase() && template !== template.toLowerCase()) {
+				return replacement.toUpperCase();
+			}
+			if (template[0] === template[0].toUpperCase() && template[0] !== template[0].toLowerCase()) {
+				return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+			}
+			return replacement;
+		}
+
+		function piratify(text) {
+			return text.replace(RE, function (word) {
+				var rep = DICT[word.toLowerCase()];
+				return rep ? matchCase(word, rep) : word;
+			});
+		}
+
+		// --- Text-node walking -------------------------------------------------
+		var SKIP_TAGS = { CODE: 1, PRE: 1, INPUT: 1, TEXTAREA: 1, SCRIPT: 1, STYLE: 1, KBD: 1, SAMP: 1 };
+
+		function shouldSkip(node) {
+			var el = node.parentElement;
+			while (el && el !== document.body && el !== document.documentElement) {
+				if (SKIP_TAGS[el.tagName]) return true;
+				if (el.hasAttribute && el.hasAttribute('data-no-piratify')) return true;
+				if (el.isContentEditable) return true;
+				el = el.parentElement;
+			}
+			return false;
+		}
+
+		// WeakMap of text node -> original string, so a restore is byte-exact and
+		// re-applying pirate never double-transforms.
+		var originals = new WeakMap();
+
+		function eachTextNode(fn) {
+			var root = document.body;
+			if (!root) return;
+			var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+				acceptNode: function (node) {
+					if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+					if (shouldSkip(node)) return NodeFilter.FILTER_REJECT;
+					return NodeFilter.FILTER_ACCEPT;
+				},
+			});
+			var n;
+			while ((n = walker.nextNode())) fn(n);
+		}
+
+		function applyPirate() {
+			eachTextNode(function (node) {
+				var base = originals.has(node) ? originals.get(node) : node.nodeValue;
+				if (!originals.has(node)) originals.set(node, base);
+				var swapped = piratify(base);
+				if (swapped !== node.nodeValue) node.nodeValue = swapped;
+			});
+		}
+
+		function restoreEnglish() {
+			eachTextNode(function (node) {
+				if (originals.has(node)) {
+					var orig = originals.get(node);
+					if (node.nodeValue !== orig) node.nodeValue = orig;
+				}
+			});
+		}
+
+		function current() {
+			try {
+				var stored = localStorage.getItem('language');
+				if (stored && LANGS[stored]) return stored;
+			} catch (e) {}
+			return 'en';
+		}
+
+		function applyLanguage(id, persist) {
+			if (!LANGS[id]) id = 'en';
+			if (persist) { try { localStorage.setItem('language', id); } catch (e) {} }
+			document.documentElement.setAttribute('data-lang', id);
+			if (id === 'pirate') applyPirate();
+			else restoreEnglish();
+			syncChecks();
+		}
+
+		function syncChecks() {
+			var active = current();
+			document.querySelectorAll('[data-lang-option]').forEach(function (opt) {
+				var on = opt.getAttribute('data-lang-option') === active;
+				opt.setAttribute('aria-checked', on ? 'true' : 'false');
+				var check = opt.querySelector('[data-lang-check]');
+				if (check) check.style.opacity = on ? '1' : '0';
+			});
+		}
+
+		function setOpen(menu, open) {
+			if (!menu) return;
+			var btn = menu.querySelector('[data-lang-toggle]');
+			var panel = menu.querySelector('[data-lang-panel]');
+			if (!btn || !panel) return;
+			btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+			panel.hidden = !open;
+		}
+
+		function closeAll() {
+			document.querySelectorAll('[data-lang-menu]').forEach(function (m) { setOpen(m, false); });
+		}
+
+		document.addEventListener('click', function (e) {
+			var option = e.target.closest('[data-lang-option]');
+			if (option) {
+				applyLanguage(option.getAttribute('data-lang-option'), true);
+				closeAll();
+				return;
+			}
+			var toggle = e.target.closest('[data-lang-toggle]');
+			if (toggle) {
+				var menu = toggle.closest('[data-lang-menu]');
+				var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+				closeAll();
+				if (!isOpen) { setOpen(menu, true); syncChecks(); }
+				return;
+			}
+			if (!e.target.closest('[data-lang-menu]')) closeAll();
+		});
+
+		document.addEventListener('keydown', function (e) {
+			if (e.key !== 'Escape') return;
+			document.querySelectorAll('[data-lang-menu]').forEach(function (m) {
+				var btn = m.querySelector('[data-lang-toggle]');
+				var panel = m.querySelector('[data-lang-panel]');
+				if (btn && panel && !panel.hidden) btn.focus();
+			});
+			closeAll();
+		});
+
+		// Apply the persisted language on first load and after every route swap.
+		// originals is keyed by the *new* DOM nodes after a swap, so we re-cache
+		// and re-transform from scratch each time — keeping it reversible.
+		function reapply() { applyLanguage(current(), false); }
+		reapply();
+		document.addEventListener('astro:after-swap', reapply);
+		// Tina visual editor re-renders content without a full route swap.
+		document.addEventListener('astro:page-load', reapply);
+	}
+</script>
