@@ -7,8 +7,19 @@
 // the ship are all hand-written here. Inspired by dr2's "Sailing" on Shadertoy,
 // but no CC-licensed code is copied or vendored; this stays under the repo license.
 //
+// Theme-aware: the shader reads the active colour theme (the same system
+// ThemeToggle drives — the `.dark` class and `data-theme` attribute on <html>).
+// In the "Tempest watch" (storm) theme the sea turns genuinely stormy — bigger,
+// choppier waves, a dark desaturated palette, overcast light (no sun-glint),
+// whitecap foam and an occasional lightning flash. The transition is animated via
+// a uStorm uniform that eases toward the target, and it updates LIVE when the
+// theme changes via the picker (a MutationObserver on <html>, plus astro:after-swap)
+// with no reload. Other themes keep the calm sea.
+//
 // Fallbacks & guards (see the inline script):
-//   - prefers-reduced-motion  -> no animation; renders a single still frame
+//   - prefers-reduced-motion  -> no animation; renders a single still frame; in
+//                                 storm theme the still frame is stormy but the
+//                                 lightning flash is suppressed (no strobing)
 //   - WebGL unavailable        -> canvas hidden, CSS gradient fallback shown
 //   - perf guard               -> DPR capped; pauses when offscreen; downgrades
 //                                 resolution / pauses if FPS drops below ~30
@@ -54,6 +65,20 @@
 				oklch(0.14 0.04 245) 100%
 			);
 		opacity: 0.7;
+	}
+	/* Storm theme: a darker, desaturated overcast wash for the no-WebGL fallback,
+	   so the CSS-only path also reads stormy when "Tempest watch" is active. */
+	:global([data-theme='storm']) .ocean-hero__fallback {
+		background:
+			radial-gradient(120% 80% at 50% 6%, oklch(0.34 0.02 250 / 0.9), transparent 58%),
+			linear-gradient(
+				to bottom,
+				oklch(0.30 0.02 250) 0%,
+				oklch(0.24 0.022 250) 44%,
+				oklch(0.18 0.02 248) 58%,
+				oklch(0.12 0.018 248) 100%
+			);
+		opacity: 0.78;
 	}
 	.ocean-hero__canvas {
 		position: absolute;
@@ -139,6 +164,12 @@
 			precision mediump float;
 			uniform vec2  uRes;
 			uniform float uTime;
+			// Storm intensity 0..1, eased toward the active theme on the JS side:
+			// 0 = calm sea (light/dark/tropical), 1 = full "Tempest watch" storm.
+			uniform float uStorm;
+			// 1.0 when prefers-reduced-motion is on — suppresses the lightning
+			// strobe so the storm still reads stormy without flashing.
+			uniform float uReduce;
 
 			// --- hash / value noise / fbm (original, classic ingredients) ------
 			float hash(vec2 p) {
@@ -156,14 +187,17 @@
 				float d = hash(i + vec2(1.0, 1.0));
 				return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 			}
-			float fbm(vec2 p) {
+			// gain shapes the per-octave amplitude falloff: a higher gain keeps more
+			// energy in the finer octaves, giving steeper, choppier swell. We raise
+			// gain with the storm so the seas get rougher, not just taller.
+			float fbm(vec2 p, float gain) {
 				float v = 0.0;
 				float amp = 0.5;
 				mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
 				for (int i = 0; i < 5; i++) {
 					v += amp * noise(p);
 					p = rot * p * 2.02;
-					amp *= 0.5;
+					amp *= gain;
 				}
 				return v;
 			}
@@ -174,13 +208,26 @@
 				float horizon = 0.56;                    // sea/sky split
 
 				// ---- Sky -------------------------------------------------------
+				// Calm sky; in the storm it desaturates to a dim overcast slate.
 				vec3 skyTop = vec3(0.43, 0.62, 0.80);
 				vec3 skyLow = vec3(0.78, 0.84, 0.86);
+				vec3 stormTop = vec3(0.07, 0.08, 0.11);
+				vec3 stormLow = vec3(0.15, 0.17, 0.21);
+				skyTop = mix(skyTop, stormTop, uStorm);
+				skyLow = mix(skyLow, stormLow, uStorm);
 				vec3 sky = mix(skyLow, skyTop, smoothstep(horizon, 1.0, uv.y));
-				// Soft sun glow upper-centre-right.
+				// Sun glow upper-centre-right — faded out under storm cloud cover.
 				vec2 sun = vec2(0.62, 0.86);
 				float sunD = distance(vec2(uv.x * aspect, uv.y), vec2(sun.x * aspect, sun.y));
-				sky += vec3(1.0, 0.93, 0.78) * smoothstep(0.5, 0.0, sunD) * 0.5;
+				sky += vec3(1.0, 0.93, 0.78) * smoothstep(0.5, 0.0, sunD) * 0.5 * (1.0 - uStorm);
+				// Roiling storm clouds: a slow dark FBM layer rolling across the sky.
+				if (uStorm > 0.001) {
+					float cloud = fbm(vec2(uv.x * aspect * 2.2, uv.y * 2.6) + vec2(uTime * 0.04, 0.0), 0.55);
+					cloud = smoothstep(0.25, 0.8, cloud);
+					sky = mix(sky, sky * vec3(0.42, 0.45, 0.52), cloud * uStorm * 0.85);
+					// Pull the whole sky down a touch so it never reads sunny.
+					sky *= mix(1.0, 0.8, uStorm);
+				}
 
 				// ---- Sea -------------------------------------------------------
 				// Project screen space into a faux-perspective sea plane: rows
@@ -192,22 +239,40 @@
 				sea.x = (uv.x - 0.5) * aspect * persp * 1.4;
 				sea.y = persp * 1.2 + uTime * 0.18;
 
-				float swell = fbm(sea * 2.0 + vec2(0.0, uTime * 0.05));
-				swell += 0.5 * fbm(sea * 5.0 - vec2(uTime * 0.07, 0.0));
+				// Storm pushes the FBM gain up (steeper, choppier octaves) and speeds
+				// the swell so the surface churns rather than gently rolling.
+				float gain = mix(0.5, 0.72, uStorm);
+				float spd  = mix(1.0, 1.7, uStorm);
+				float swell = fbm(sea * 2.0 + vec2(0.0, uTime * 0.05 * spd), gain);
+				swell += 0.5 * fbm(sea * 5.0 - vec2(uTime * 0.07 * spd, 0.0), gain);
+				// A third, finer octave only in the storm — the white-cap chop.
+				swell += uStorm * 0.35 * fbm(sea * 9.0 + vec2(uTime * 0.12, uTime * 0.04), gain);
+				// Larger amplitude (taller waves) as the storm builds.
+				swell *= mix(1.0, 1.45, uStorm);
 				swell *= mix(0.25, 1.0, depth);                  // calmer toward horizon
 
-				vec3 seaDeep = vec3(0.06, 0.20, 0.32);
-				vec3 seaLite = vec3(0.30, 0.55, 0.62);
+				// Palette: calm teal sea darkens to a desaturated steel-slate in the storm.
+				vec3 seaDeep = mix(vec3(0.06, 0.20, 0.32), vec3(0.04, 0.07, 0.11), uStorm);
+				vec3 seaLite = mix(vec3(0.30, 0.55, 0.62), vec3(0.20, 0.26, 0.31), uStorm);
 				vec3 water = mix(seaDeep, seaLite, swell);
 
-				// Sun glint streak on the water.
+				// Sun glint streak on the water — overcast storm kills it.
 				float glint = smoothstep(0.45, 0.0, abs(uv.x - 0.6)) *
 				              smoothstep(0.0, 0.18, depth) *
 				              (0.5 + 0.5 * sin(swell * 24.0 + uTime));
-				water += vec3(1.0, 0.95, 0.8) * glint * 0.18;
+				water += vec3(1.0, 0.95, 0.8) * glint * 0.18 * (1.0 - uStorm);
 
-				// Crest highlights.
-				water += vec3(0.9) * smoothstep(0.7, 0.95, swell) * 0.25;
+				// Crest highlights (calm sea sparkle).
+				water += vec3(0.9) * smoothstep(0.7, 0.95, swell) * 0.25 * (1.0 - 0.4 * uStorm);
+
+				// Whitecaps / foam: in the storm the steepest crests blow out to cold
+				// grey-white foam, broken up by noise so it reads as spray, not a band.
+				if (uStorm > 0.001) {
+					float foamN = noise(sea * 14.0 + vec2(uTime * 0.6, uTime * 0.2));
+					float foam = smoothstep(0.62, 0.86, swell) * foamN;
+					foam *= mix(0.2, 1.0, depth);
+					water = mix(water, vec3(0.78, 0.82, 0.86), clamp(foam, 0.0, 1.0) * uStorm * 0.9);
+				}
 
 				vec3 col = uv.y > horizon ? sky : water;
 
@@ -246,9 +311,28 @@
 				             step(sp.y, -0.005);
 				col += vec3(0.8, 0.9, 1.0) * wake * 0.12;
 
-				// Vignette for focus.
+				// ---- Lightning ------------------------------------------------
+				// An occasional flash: a hash keyed to the current ~2.3s window fires
+				// only when it clears a high threshold, so strikes are sparse and
+				// irregular. Gated by uStorm and fully OFF under reduced motion
+				// (uReduce) so there is no strobing for motion-sensitive users.
+				float flashGate = uStorm * (1.0 - uReduce);
+				if (flashGate > 0.001) {
+					float seg = floor(uTime / 2.3);
+					float strike = hash(vec2(seg, 7.0));
+					// Only the top slice of segments fire; each is a fast decaying pulse.
+					float fire = step(0.78, strike);
+					float local = fract(uTime / 2.3);
+					float pulse = fire * exp(-local * 18.0) * (0.6 + 0.4 * hash(vec2(seg, 3.0)));
+					// Brighten the sky more than the sea, biased to the upper half.
+					float skyBias = smoothstep(horizon - 0.1, 1.0, uv.y);
+					col += vec3(0.7, 0.78, 0.95) * pulse * flashGate * mix(0.25, 1.0, skyBias);
+				}
+
+				// Vignette for focus — tightened in the storm for a moodier frame.
 				float vig = smoothstep(1.25, 0.35, distance(uv, vec2(0.5)));
 				col *= mix(0.82, 1.0, vig);
+				col *= mix(1.0, 0.9, uStorm);
 
 				gl_FragColor = vec4(col, 1.0);
 			}
@@ -290,6 +374,25 @@
 
 		const uRes = gl.getUniformLocation(prog, 'uRes');
 		const uTime = gl.getUniformLocation(prog, 'uTime');
+		const uStorm = gl.getUniformLocation(prog, 'uStorm');
+		const uReduce = gl.getUniformLocation(prog, 'uReduce');
+
+		// --- Theme awareness -----------------------------------------------
+		// The active theme is the same signal ThemeToggle drives: the storm
+		// preset sets data-theme="storm" (and .dark) on <html>. We read that
+		// straight off the document so we never duplicate the theme registry,
+		// then ease a uStorm uniform toward 1 (storm) or 0 (calm) so switching
+		// themes via the picker visibly rolls the sea up/down with no reload.
+		function targetStorm() {
+			try {
+				return document.documentElement.getAttribute('data-theme') === 'storm' ? 1.0 : 0.0;
+			} catch (_) { return 0.0; }
+		}
+		// Reduced-motion is a fixed flag for the lifetime of this instance.
+		gl.uniform1f(uReduce, reduceMotion ? 1.0 : 0.0);
+		// Seed the eased value at the target so the first paint is already correct.
+		let stormTarget = targetStorm();
+		let stormValue = stormTarget;
 
 		// --- Perf guard state --------------------------------------------------
 		// Cap devicePixelRatio so high-DPI screens don't shade 4x the pixels.
@@ -313,6 +416,12 @@
 		let ready = false;
 		function drawFrame(tSeconds) {
 			resize();
+			// Ease the storm uniform toward its target so a theme switch ramps
+			// the sea up/down (~0.6s) instead of snapping. dt is unknown here, so
+			// use a fixed per-frame step — good enough for a cosmetic transition.
+			stormValue += (stormTarget - stormValue) * 0.08;
+			if (Math.abs(stormTarget - stormValue) < 0.002) stormValue = stormTarget;
+			gl.uniform1f(uStorm, stormValue);
 			gl.uniform1f(uTime, tSeconds);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			if (!ready) {
@@ -322,14 +431,25 @@
 		}
 
 		// --- Reduced motion: a single still frame, no RAF loop. ----------------
+		// The frame still reflects the theme (a stormy still for storm), but the
+		// shader suppresses the lightning strobe via uReduce. A theme switch while
+		// reduced-motion is on snaps the uniform and redraws the single frame.
 		if (reduceMotion) {
-			drawFrame(8.0); // a pleasant fixed moment
-			const onResizeStill = () => drawFrame(8.0);
+			const drawStill = () => { stormValue = targetStorm(); stormTarget = stormValue; drawFrame(8.0); };
+			drawStill();
+			const onResizeStill = () => drawStill();
 			window.addEventListener('resize', onResizeStill, { passive: true });
-			// Teardown for the still path: drop the listener and release GL so
-			// the context isn't leaked across SPA navigation.
+			// Observe theme changes on <html> so the still frame updates live when
+			// the picker switches themes (no reload), then redraw the still.
+			const themeObsStill = new MutationObserver(drawStill);
+			themeObsStill.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+			document.addEventListener('astro:after-swap', drawStill);
+			// Teardown for the still path: drop the listeners/observer and release
+			// GL so nothing is leaked across SPA navigation.
 			window.__oceanHeroTeardown = () => {
 				window.removeEventListener('resize', onResizeStill);
+				themeObsStill.disconnect();
+				document.removeEventListener('astro:after-swap', drawStill);
 				releaseGL();
 				window.__oceanHeroTeardown = null;
 			};
@@ -415,6 +535,15 @@
 
 		window.addEventListener('resize', resize, { passive: true });
 
+		// Theme awareness, live: watch <html> for class / data-theme changes so
+		// flipping to (or from) the storm theme via the picker rolls the sea up
+		// or down with no reload. astro:after-swap re-reads it too, since the
+		// no-flash script re-applies the theme onto the swapped-in <html>. Both
+		// just retarget the eased uStorm value the loop animates toward.
+		const syncStorm = () => { stormTarget = targetStorm(); if (running) startLoop(); };
+		const themeObs = new MutationObserver(syncStorm);
+		themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+		document.addEventListener('astro:after-swap', syncStorm);
 		// Teardown for the animated path: stop the RAF loop, drop every listener
 		// and the observer, then release the GL context. Parked on window so the
 		// router lifecycle (and any double page-load) can reclaim it.
@@ -422,6 +551,8 @@
 			running = false;
 			stopLoop();
 			if (io) { io.disconnect(); io = null; }
+			themeObs.disconnect();
+			document.removeEventListener('astro:after-swap', syncStorm);
 			document.removeEventListener('visibilitychange', onVisibility);
 			window.removeEventListener('resize', resize);
 			releaseGL();
