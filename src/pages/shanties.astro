@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import { getConfig } from '../lib/data';
 import { shanties, previewLink } from '../lib/shanties';
+import JudgeParrot from '../components/shanties/JudgeParrot.astro';
 
 const config = (await getConfig()).data?.config ?? null;
 ---
@@ -27,6 +28,21 @@ const config = (await getConfig()).data?.config ?? null;
 					>{s.title.split(' (')[0]}</a>
 				))}
 			</nav>
+			<div class="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+				<span aria-hidden="true" class="text-xl">🦜</span>
+				<p class="flex-1 text-muted-foreground">
+					<strong class="text-foreground">Rate My Shanty:</strong> hit
+					<em>Rate my take</em> on any song and Cap'n Squawk the judge parrot
+					will give your "performance" a made-up doubloon score — just for
+					laughs, no real audio is judged.
+				</p>
+				<button
+					id="shanty-villain-toggle"
+					type="button"
+					aria-pressed="false"
+					class="shrink-0 rounded-full border border-primary/40 bg-card px-3 py-1 text-sm font-medium text-foreground transition-colors hover:bg-primary/10"
+				>Villain era: off</button>
+			</div>
 			<hr class="rope-divider max-w-2xl" aria-hidden="true" />
 		</header>
 
@@ -39,15 +55,33 @@ const config = (await getConfig()).data?.config ?? null;
 					</div>
 					<p class="text-sm font-medium text-muted-foreground">{s.artist}</p>
 					<p class="flex-1 text-sm text-muted-foreground">{s.note}</p>
-					<a
-						href={previewLink(s)}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="inline-flex w-fit items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+					<div class="flex flex-wrap items-center gap-2">
+						<a
+							href={previewLink(s)}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex w-fit items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+						>
+							Preview <span aria-hidden="true">↗</span>
+							<span class="sr-only">(opens a search for {s.title} in a new tab)</span>
+						</a>
+						<button
+							type="button"
+							data-shanty-rate
+							data-shanty-title={s.title.split(' (')[0]}
+							class="shanty-rate-btn inline-flex w-fit items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+						>
+							Rate my take <span aria-hidden="true">🦜</span>
+						</button>
+					</div>
+					<div
+						data-shanty-progress
+						class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+						hidden
+						aria-hidden="true"
 					>
-						Preview <span aria-hidden="true">↗</span>
-						<span class="sr-only">(opens a search for {s.title} in a new tab)</span>
-					</a>
+						<div data-shanty-fill class="h-full w-0 bg-primary"></div>
+					</div>
 				</li>
 			))}
 		</ol>
@@ -71,4 +105,6 @@ const config = (await getConfig()).data?.config ?? null;
 			</p>
 		</section>
 	</main>
+
+	<JudgeParrot />
 </Base>
