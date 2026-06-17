@@ -1,0 +1,414 @@
+---
+// Doubloons -> Grog satire chart — a FULLY FICTIONAL, client-side island.
+//
+// This is a JOKE. There is no real "Doubloons -> Grog" exchange rate, no market,
+// and no data source. Every number on this chart is INVENTED in your browser by a
+// seeded pseudo-random walk (seeded from the day so it's stable per load but
+// drifts day to day). There are NO network calls of any kind — no fetch, no API,
+// no proxy, no third party. Nothing here is financial advice and nothing here is
+// real. The prominent banner says so, loudly, on purpose.
+//
+// Like the real gold chart next door, the candlesticks are hand-rolled SVG (no
+// charting dependency). This component is deliberately self-contained and shares
+// NO state with GoldChart — it can't read, alter, or break the real chart above.
+//
+// All dynamic text is written via textContent (never innerHTML).
+---
+
+<section
+	id="grog"
+	class="flex scroll-mt-24 flex-col gap-6 rounded-xl border-2 border-dashed border-amber-500/70 bg-card p-5 text-card-foreground shadow-sm sm:p-6"
+	data-grog-root
+>
+	<!-- The unmistakable JOKE banner. Loud, dashed, and impossible to miss so no
+	     one mistakes this for the real chart above. -->
+	<div
+		role="note"
+		class="flex flex-col gap-1 rounded-lg border-2 border-amber-500 bg-amber-500/15 px-4 py-3 text-center"
+	>
+		<p class="text-sm font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
+			⚓ Fictional — Not Financial Advice ⚓
+		</p>
+		<p class="text-xs text-muted-foreground">
+			A made-up "Doubloons→Grog" exchange rate, invented in your browser for a
+			laugh. No real market. No data source. No network calls. Do not trade
+			your boots on it.
+		</p>
+	</div>
+
+	<!-- Latest (made-up) rate, as text for a11y. -->
+	<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+		<div class="flex flex-col gap-1">
+			<h2 class="text-sm font-medium text-muted-foreground">
+				Latest Doubloons→Grog rate <span class="text-amber-600 dark:text-amber-400">(fictional)</span>
+			</h2>
+			<p class="flex items-baseline gap-2">
+				<span
+					id="grog-latest"
+					class="font-serif text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl"
+					aria-live="polite"
+				>—</span>
+				<span id="grog-latest-unit" class="text-sm text-muted-foreground">tankards / doubloon</span>
+			</p>
+			<p class="text-xs text-muted-foreground">
+				Entirely imaginary. Refreshes only when you reload the page.
+			</p>
+		</div>
+
+		<!-- Comedic market-sentiment gauge. The state word carries the meaning
+		     (not colour alone); the tint is decorative. -->
+		<div class="flex flex-col gap-1" data-grog-sentiment-wrap>
+			<span class="text-xs font-medium text-muted-foreground">Market mood (fictional)</span>
+			<span
+				id="grog-sentiment"
+				class="text-sm font-semibold tabular-nums"
+				aria-live="polite"
+			>—</span>
+		</div>
+	</div>
+
+	<!-- Chart region. Responsive SVG via viewBox; a text status sits above it so
+	     state is conveyed without relying on the graphic. -->
+	<div class="flex flex-col gap-2">
+		<p id="grog-chart-status" class="text-sm text-muted-foreground" aria-live="polite">
+			Brewing imaginary candles…
+		</p>
+		<div
+			class="relative w-full overflow-hidden rounded-md border bg-background"
+			data-grog-chart-wrap
+		>
+			<svg
+				id="grog-chart"
+				viewBox="0 0 800 320"
+				preserveAspectRatio="none"
+				class="block h-[260px] w-full sm:h-[320px]"
+				role="img"
+				aria-label="Fictional Doubloons to Grog candlestick chart — a joke, not real data"
+			></svg>
+			<!-- Tooltip; pointer-only, hidden until hover/tap. Not an aria-live
+			     region (would spam SR users). Dynamic text set via textContent. -->
+			<div
+				id="grog-tooltip"
+				aria-hidden="true"
+				class="pointer-events-none absolute z-10 hidden max-w-[16rem] -translate-x-1/2 -translate-y-full rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+			></div>
+		</div>
+		<p class="text-xs text-muted-foreground">
+			Lantern-lit candlesticks: tall when the grog flows, short when the rum
+			runs dry. Hover (or tap) a candle for a wholly invented, definitely-(not)-financial
+			tip from the quartermaster. None of this is real.
+		</p>
+		<!-- Visually-hidden data table: a keyboard/SR-accessible equivalent of the
+		     pointer-only candle hover. -->
+		<div id="grog-data-table" class="sr-only" aria-live="polite"></div>
+	</div>
+</section>
+
+<script is:inline>
+	(() => {
+		const root = document.querySelector('[data-grog-root]');
+		if (!root || root.dataset.grogBound === '1') return;
+		root.dataset.grogBound = '1';
+
+		// ---- Elements --------------------------------------------------------
+		const latestEl = root.querySelector('#grog-latest');
+		const sentimentEl = root.querySelector('#grog-sentiment');
+		const chartEl = root.querySelector('#grog-chart');
+		const chartStatusEl = root.querySelector('#grog-chart-status');
+		const tooltipEl = root.querySelector('#grog-tooltip');
+		const chartWrap = root.querySelector('[data-grog-chart-wrap]');
+		const dataTableEl = root.querySelector('#grog-data-table');
+		const SVGNS = 'http://www.w3.org/2000/svg';
+
+		// ---- Seeded PRNG (mulberry32) — deterministic per seed --------------
+		// Seed from the calendar day so the chart is STABLE within a page load
+		// (and a given day) but drifts day to day. NO randomness from the network.
+		function mulberry32(a) {
+			return function () {
+				a |= 0;
+				a = (a + 0x6d2b79f5) | 0;
+				let t = Math.imul(a ^ (a >>> 15), 1 | a);
+				t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+				return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+			};
+		}
+
+		const DAY_MS = 24 * 3600 * 1000;
+		const N_CANDLES = 30; // ~a month of imaginary days
+		const dayIndex = Math.floor(Date.now() / DAY_MS);
+		const rand = mulberry32(dayIndex * 2654435761 >>> 0);
+
+		// ---- Generate fictional OHLC via a seeded random walk ---------------
+		// Pure client-side fabrication. Each "candle" is a made-up day.
+		function makeCandles() {
+			const out = [];
+			let price = 8 + rand() * 6; // start somewhere whimsical
+			const now = Date.now();
+			for (let i = 0; i < N_CANDLES; i++) {
+				const open = price;
+				// Drift + a dash of volatility; clamp so it never goes silly-negative.
+				const drift = (rand() - 0.48) * 1.4;
+				const close = Math.max(0.5, open + drift);
+				const wickUp = rand() * 1.1;
+				const wickDown = rand() * 1.1;
+				const high = Math.max(open, close) + wickUp;
+				const low = Math.max(0.2, Math.min(open, close) - wickDown);
+				const t = now - (N_CANDLES - 1 - i) * DAY_MS;
+				out.push({ t, open, high, low, close });
+				price = close;
+			}
+			return out;
+		}
+
+		const candles = makeCandles();
+
+		// ---- Comedic sentiment gauge ----------------------------------------
+		// Pick a joke mood from the (fictional) recent trend, with a seeded twist.
+		function computeSentiment() {
+			const last = candles[candles.length - 1];
+			const prev = candles[Math.max(0, candles.length - 6)];
+			const change = last.close - prev.close;
+			const bullish = [
+				'🦜 to the moon (allegedly)',
+				'🍻 grog goblins are feasting',
+				'📈 unreasonably buoyant',
+				'⚓ anchored in optimism',
+			];
+			const bearish = [
+				"💀 it's giving recession",
+				'🪣 bailing water, captain',
+				'📉 the rum is gone',
+				'🌧️ stormy with a chance of scurvy',
+			];
+			const neutral = [
+				'😐 flat as a becalmed sea',
+				'🤷 vibes are inconclusive',
+				'🦀 crab market (literally)',
+				'🫧 mostly froth',
+			];
+			const pool = change > 0.6 ? bullish : change < -0.6 ? bearish : neutral;
+			return pool[Math.floor(rand() * pool.length)];
+		}
+
+		// ---- Comedic (not) financial advice tooltips ------------------------
+		const ADVICE = [
+			'Buy high, sell driftwood. The quartermaster believes in you.',
+			'Diversify across rum, grog, and more rum.',
+			'Past performance is fictional. So is future performance.',
+			'When in doubt, parrot out.',
+			"This candle whispers: 'arrr you sure?'",
+			'Hodl yer tankard. Or do the opposite. We are not lawyers.',
+			'The dead-cat bounce is, regrettably, a bilge-rat bounce here.',
+			'Set a stop-loss at one (1) eyepatch.',
+			'Technical analysis says: it looks like a candle.',
+			'Insider tip: there are no insiders. There is no market.',
+		];
+
+		// ---- Helpers ---------------------------------------------------------
+		const isFiniteNum = (n) => typeof n === 'number' && isFinite(n);
+		const fmtRate = (v) => `${v.toFixed(2)} 🍺`;
+		const fmtUtcDay = (t) =>
+			new Date(t).toLocaleDateString('en-AU', { dateStyle: 'medium', timeZone: 'UTC' });
+
+		const mk = (name, attrs) => {
+			const el = document.createElementNS(SVGNS, name);
+			for (const k in attrs) el.setAttribute(k, attrs[k]);
+			return el;
+		};
+
+		// ---- Render: latest rate + sentiment --------------------------------
+		function renderLatest() {
+			const last = candles[candles.length - 1];
+			latestEl.textContent = last && isFiniteNum(last.close) ? fmtRate(last.close) : '—';
+			sentimentEl.textContent = computeSentiment();
+		}
+
+		// ---- Render: the candlestick chart ----------------------------------
+		let chartGeom = null; // for hit-testing the tooltip
+
+		function clearChart() {
+			while (chartEl.firstChild) chartEl.removeChild(chartEl.firstChild);
+		}
+
+		function renderChart() {
+			clearChart();
+			tooltipEl.classList.add('hidden');
+			chartGeom = null;
+
+			if (!candles.length) {
+				chartStatusEl.textContent = 'No imaginary candles to show.';
+				renderDataTable([]);
+				return;
+			}
+
+			const W = 800, H = 320, padL = 56, padR = 16, padT = 16, padB = 28;
+			const highs = candles.map((c) => c.high).filter(isFiniteNum);
+			const lows = candles.map((c) => c.low).filter(isFiniteNum);
+			let min = Math.min(...lows);
+			let max = Math.max(...highs);
+			if (!isFiniteNum(min) || !isFiniteNum(max) || min === max) { min = 0; max = (max || 1) + 1; }
+			const pad = (max - min) * 0.08;
+			min = Math.max(0, min - pad); max += pad;
+
+			const y = (v) => padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+			const plotW = W - padL - padR;
+			const slot = plotW / candles.length;
+			const bodyW = Math.max(2, slot * 0.55);
+
+			// Y gridlines + labels (text labels, not colour-only).
+			const ticks = 4;
+			for (let i = 0; i <= ticks; i++) {
+				const v = min + ((max - min) * i) / ticks;
+				const gy = y(v);
+				chartEl.appendChild(mk('line', {
+					x1: padL, x2: W - padR, y1: gy, y2: gy,
+					stroke: 'var(--border)', 'stroke-width': '1',
+				}));
+				const label = mk('text', {
+					x: padL - 8, y: gy + 4, 'text-anchor': 'end',
+					fill: 'var(--muted-foreground)', 'font-size': '12',
+				});
+				label.textContent = v.toFixed(1);
+				chartEl.appendChild(label);
+			}
+
+			// X axis end labels (UTC, to match the made-up calendar days).
+			const xs = mk('text', { x: padL, y: H - 8, 'text-anchor': 'start', fill: 'var(--muted-foreground)', 'font-size': '12' });
+			xs.textContent = fmtUtcDay(candles[0].t);
+			chartEl.appendChild(xs);
+			const xe = mk('text', { x: W - padR, y: H - 8, 'text-anchor': 'end', fill: 'var(--muted-foreground)', 'font-size': '12' });
+			xe.textContent = fmtUtcDay(candles[candles.length - 1].t);
+			chartEl.appendChild(xe);
+
+			// Candles — ship-lantern styling. Rising candles glow warm amber (lit
+			// lantern), falling candles burn down to a dim ember. The up/down
+			// meaning is also in the tooltip text, so it's never colour-only.
+			const LIT = '#f59e0b';   // amber-500 — lantern aglow (rising)
+			const EMBER = '#b45309'; // amber-700 — burnt-down ember (falling)
+			const geom = [];
+			candles.forEach((c, i) => {
+				const cx = padL + slot * (i + 0.5);
+				const rising = c.close >= c.open;
+				const colour = rising ? LIT : EMBER;
+				const yHigh = y(c.high), yLow = y(c.low);
+				const yOpen = y(c.open), yClose = y(c.close);
+				const top = Math.min(yOpen, yClose);
+				const bodyH = Math.max(1.5, Math.abs(yClose - yOpen));
+
+				// Wick (the lantern's hanging chain).
+				chartEl.appendChild(mk('line', {
+					x1: cx, x2: cx, y1: yHigh, y2: yLow,
+					stroke: colour, 'stroke-width': '1.5', 'stroke-linecap': 'round',
+				}));
+				// Body (the lantern itself) — rounded for a glassy lantern look.
+				chartEl.appendChild(mk('rect', {
+					x: cx - bodyW / 2, y: top, width: bodyW, height: bodyH,
+					rx: '2', ry: '2',
+					fill: rising ? colour : 'var(--background)',
+					stroke: colour, 'stroke-width': '1.5',
+				}));
+				// A tiny "flame" cap on rising lanterns for whimsy.
+				if (rising) {
+					chartEl.appendChild(mk('circle', {
+						cx, cy: yHigh, r: '1.6', fill: LIT,
+					}));
+				}
+				geom.push({ ...c, cx, slot, rising });
+			});
+
+			chartGeom = { geom, W, H, slot };
+			chartStatusEl.textContent =
+				`Showing ${candles.length} entirely fictional candles (${fmtUtcDay(candles[0].t)} – ${fmtUtcDay(candles[candles.length - 1].t)}). Not real. Not advice.`;
+			renderDataTable(candles);
+		}
+
+		// ---- Accessible data table (keyboard/SR equivalent of the hover) ----
+		function renderDataTable(rows) {
+			while (dataTableEl.firstChild) dataTableEl.removeChild(dataTableEl.firstChild);
+			if (!rows || !rows.length) return;
+			const table = document.createElement('table');
+			const caption = document.createElement('caption');
+			caption.textContent = 'Fictional Doubloons→Grog candles (open/high/low/close, tankards per doubloon). Invented in-browser — not real data.';
+			table.appendChild(caption);
+			const thead = document.createElement('thead');
+			const hr = document.createElement('tr');
+			['Day', 'Open', 'High', 'Low', 'Close'].forEach((h) => {
+				const th = document.createElement('th');
+				th.setAttribute('scope', 'col');
+				th.textContent = h;
+				hr.appendChild(th);
+			});
+			thead.appendChild(hr);
+			table.appendChild(thead);
+			const tbody = document.createElement('tbody');
+			for (const c of rows) {
+				const tr = document.createElement('tr');
+				const cells = [fmtUtcDay(c.t), c.open.toFixed(2), c.high.toFixed(2), c.low.toFixed(2), c.close.toFixed(2)];
+				cells.forEach((val) => {
+					const td = document.createElement('td');
+					td.textContent = val;
+					tr.appendChild(td);
+				});
+				tbody.appendChild(tr);
+			}
+			table.appendChild(tbody);
+			dataTableEl.appendChild(table);
+		}
+
+		// ---- Tooltip (hover desktop / tap mobile) ---------------------------
+		// Pick a fresh comedic advice line each time, via textContent (no innerHTML).
+		function showTooltipAt(clientX) {
+			if (!chartGeom) return;
+			const rect = chartEl.getBoundingClientRect();
+			const vx = ((clientX - rect.left) / rect.width) * chartGeom.W;
+			let nearest = null, best = Infinity;
+			for (const c of chartGeom.geom) {
+				const dist = Math.abs(c.cx - vx);
+				if (dist < best) { best = dist; nearest = c; }
+			}
+			if (!nearest) return;
+			const advice = ADVICE[Math.floor(Math.random() * ADVICE.length)];
+			const dir = nearest.rising ? 'up' : 'down';
+			tooltipEl.textContent =
+				`${fmtUtcDay(nearest.t)} · ${fmtRate(nearest.close)} (${dir}) — (not) advice: ${advice}`;
+			tooltipEl.classList.remove('hidden');
+			const wrapRect = chartWrap.getBoundingClientRect();
+			const left = (nearest.cx / chartGeom.W) * wrapRect.width;
+			const top = (y2px(nearest) / chartGeom.H) * wrapRect.height;
+			tooltipEl.style.left = `${Math.min(Math.max(left, 80), wrapRect.width - 80)}px`;
+			tooltipEl.style.top = `${Math.max(top - 6, 12)}px`;
+		}
+		// Approximate the top of a candle's body in viewBox space for tooltip placement.
+		function y2px(c) {
+			// Re-derive y of the higher of open/close using current geom bounds.
+			// Cheap approximation: place near the wick high.
+			const highs = chartGeom.geom.map((g) => g.high);
+			const lows = chartGeom.geom.map((g) => g.low);
+			let min = Math.min(...lows), max = Math.max(...highs);
+			const pad = (max - min) * 0.08; min = Math.max(0, min - pad); max += pad;
+			const padT = 16, padB = 28, H = 320;
+			return padT + (1 - (c.high - min) / (max - min)) * (H - padT - padB);
+		}
+		function hideTooltip() { tooltipEl.classList.add('hidden'); }
+
+		chartWrap.addEventListener('pointermove', (e) => showTooltipAt(e.clientX));
+		chartWrap.addEventListener('pointerleave', hideTooltip);
+		chartWrap.addEventListener('pointerdown', (e) => showTooltipAt(e.clientX));
+
+		// ---- Teardown on client-side nav (no timers/fetches, but be tidy) ---
+		let disposed = false;
+		function teardown() {
+			if (disposed) return;
+			disposed = true;
+			chartWrap.removeEventListener('pointermove', showTooltipAt);
+			chartWrap.removeEventListener('pointerleave', hideTooltip);
+			chartWrap.removeEventListener('pointerdown', showTooltipAt);
+		}
+		document.addEventListener('astro:before-swap', teardown, { once: true });
+		window.addEventListener('pagehide', teardown, { once: true });
+
+		// ---- Go — purely local, no network --------------------------------
+		renderLatest();
+		renderChart();
+	})();
+</script>

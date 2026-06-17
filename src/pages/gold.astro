@@ -2,6 +2,7 @@
 import Base from '../layouts/Base.astro';
 import { getConfig } from '../lib/data';
 import GoldChart from '../components/gold/GoldChart.astro';
+import GrogChart from '../components/gold/GrogChart.astro';
 
 const config = (await getConfig()).data?.config ?? null;
 ---
@@ -22,5 +23,15 @@ const config = (await getConfig()).data?.config ?? null;
 		</header>
 
 		<GoldChart />
+
+		<section class="mt-12 flex flex-col gap-3">
+			<h2 class="text-2xl font-semibold tracking-tight">For the grog ledger (just for fun)</h2>
+			<p class="max-w-2xl text-muted-foreground">
+				And now, something completely made up. Below is a wholly fictional
+				"Doubloons→Grog" exchange rate — invented in your browser purely for a
+				laugh. It is not real, it is not data, and it is certainly not advice.
+			</p>
+			<GrogChart />
+		</section>
 	</main>
 </Base>
