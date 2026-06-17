@@ -3,6 +3,7 @@ import BaseHead from '../components/BaseHead.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import KrakenEasterEgg from '../components/KrakenEasterEgg.astro';
+import MessageInABottle from '../components/MessageInABottle.astro';
 import TinaIsland from '@tinacms/astro/TinaIsland.astro';
 import { getConfig } from '../lib/data';
 import { islands } from '../lib/islands';
@@ -31,5 +32,6 @@ const config = (await getConfig()).data?.config ?? null;
 			<Footer config={config} />
 		</TinaIsland>
 		<KrakenEasterEgg />
+		<MessageInABottle />
 	</body>
 </html>

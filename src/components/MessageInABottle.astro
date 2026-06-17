@@ -1,0 +1,338 @@
+---
+// MessageInABottle — a tiny "Message in a Bottle" floating fortune.
+//
+// A small floating bottle control bobs in the bottom-right corner of the
+// viewport. Activating it (click / Enter / Space) washes up a random sea-themed
+// fortune in a small card with an "another" control to draw a fresh one and a
+// close control. Purely client-side & static — no backend, no API, no audio.
+//
+// Placement is deliberately bottom-right so it never overlaps the fixed top
+// header (logo + nav + theme/language pickers, z-20) nor the Kraken overlay
+// (z-9999, which only paints when summoned). On mobile the control shrinks and
+// the card opens as a near-full-width sheet anchored above the bottle.
+//
+// Accessibility: the bottle is a real <button> with an aria-label; the card is
+// role="dialog" with aria-modal, focus moves into it on open and returns to the
+// bottle on close, Escape closes it, and all float/open animation is disabled
+// under prefers-reduced-motion. The fortune list is family-friendly maritime
+// wisdom. The key/click listeners are delegated from document and guarded by a
+// window flag so they survive Astro ClientRouter swaps and Tina re-renders
+// (same convention as KrakenEasterEgg.astro / ThemeToggle.astro).
+---
+
+<div class="bottle-root">
+	<button
+		id="bottle-toggle"
+		type="button"
+		class="bottle-toggle"
+		aria-label="Open a message in a bottle — a random sea fortune"
+		aria-haspopup="dialog"
+		aria-expanded="false"
+		aria-controls="bottle-card"
+	>
+		<!-- Decorative corked bottle with a little scroll inside. -->
+		<svg class="bottle-art" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+			<g class="bottle-glass">
+				<!-- Cork -->
+				<rect x="20" y="4" width="8" height="6" rx="1.5" fill="oklch(0.55 0.08 60)" />
+				<!-- Neck -->
+				<path d="M21 10 h6 v6 l3 4 v20 a3 3 0 0 1 -3 3 h-6 a3 3 0 0 1 -3 -3 v-20 l3 -4 z"
+					fill="currentColor" fill-opacity="0.18"
+					stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+				<!-- Rolled message inside -->
+				<rect class="bottle-scroll" x="20.5" y="24" width="7" height="14" rx="2"
+					fill="oklch(0.92 0.04 88)" stroke="oklch(0.55 0.08 60)" stroke-width="0.8" />
+				<line x1="22" y1="28" x2="26" y2="28" stroke="oklch(0.55 0.08 60)" stroke-width="0.7" />
+				<line x1="22" y1="31" x2="26" y2="31" stroke="oklch(0.55 0.08 60)" stroke-width="0.7" />
+				<line x1="22" y1="34" x2="25" y2="34" stroke="oklch(0.55 0.08 60)" stroke-width="0.7" />
+			</g>
+		</svg>
+	</button>
+
+	<div
+		id="bottle-card"
+		class="bottle-card"
+		role="dialog"
+		aria-modal="false"
+		aria-label="A message in a bottle"
+		hidden
+	>
+		<div class="bottle-card-head">
+			<span class="bottle-card-title">A message washed ashore</span>
+			<button id="bottle-close" type="button" class="bottle-card-close" aria-label="Close the message (Escape)">
+				&times;
+			</button>
+		</div>
+		<p id="bottle-fortune" class="bottle-fortune" aria-live="polite">&hellip;</p>
+		<div class="bottle-card-foot">
+			<button id="bottle-another" type="button" class="bottle-another" aria-label="Draw another message">
+				Another
+			</button>
+		</div>
+	</div>
+</div>
+
+<style>
+	.bottle-root {
+		position: fixed;
+		right: clamp(0.75rem, 2.5vw, 1.5rem);
+		bottom: clamp(0.75rem, 2.5vh, 1.5rem);
+		z-index: 40; /* above page content, below the Kraken overlay (9999) */
+	}
+
+	.bottle-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3rem;
+		height: 3rem;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 9999px;
+		background: var(--card);
+		color: var(--primary);
+		cursor: pointer;
+		box-shadow: 0 6px 18px oklch(0.19 0.04 252 / 0.22);
+		transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+		animation: bottle-bob 4.5s ease-in-out infinite;
+	}
+
+	.bottle-toggle:hover {
+		background: var(--accent);
+		box-shadow: 0 8px 22px oklch(0.19 0.04 252 / 0.3);
+	}
+
+	.bottle-toggle:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--ring);
+	}
+
+	.bottle-art {
+		width: 1.65rem;
+		height: 1.65rem;
+	}
+
+	.bottle-card {
+		position: absolute;
+		right: 0;
+		bottom: calc(3rem + 0.75rem);
+		width: min(20rem, calc(100vw - 1.5rem));
+		padding: 0.9rem 1rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--popover);
+		color: var(--popover-foreground);
+		box-shadow: 0 12px 32px oklch(0.19 0.04 252 / 0.32);
+		font-family: var(--font-serif);
+		transform-origin: bottom right;
+		animation: bottle-pop 180ms ease-out both;
+	}
+
+	.bottle-card[hidden] {
+		display: none;
+	}
+
+	.bottle-card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.bottle-card-title {
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted-foreground);
+	}
+
+	.bottle-card-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.6rem;
+		height: 1.6rem;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--muted-foreground);
+		font-size: 1.35rem;
+		line-height: 1;
+		cursor: pointer;
+		transition: background-color 140ms ease, color 140ms ease;
+	}
+
+	.bottle-card-close:hover {
+		background: var(--accent);
+		color: var(--accent-foreground);
+	}
+
+	.bottle-card-close:focus-visible,
+	.bottle-another:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--ring);
+	}
+
+	.bottle-fortune {
+		margin: 0 0 0.85rem;
+		font-size: 1rem;
+		line-height: 1.5;
+		color: var(--card-foreground);
+	}
+
+	.bottle-card-foot {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.bottle-another {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.4rem 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--secondary);
+		color: var(--secondary-foreground);
+		font-family: var(--font-serif);
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: background-color 140ms ease, color 140ms ease;
+	}
+
+	.bottle-another:hover {
+		background: var(--primary);
+		color: var(--primary-foreground);
+	}
+
+	@keyframes bottle-bob {
+		0%, 100% { transform: translateY(0) rotate(-3deg); }
+		50% { transform: translateY(-5px) rotate(3deg); }
+	}
+
+	@keyframes bottle-pop {
+		from { opacity: 0; transform: scale(0.94) translateY(6px); }
+		to { opacity: 1; transform: scale(1) translateY(0); }
+	}
+
+	/* Reduced motion: no bobbing float, no pop — show things plainly. */
+	@media (prefers-reduced-motion: reduce) {
+		.bottle-toggle { animation: none; }
+		.bottle-card { animation: none; }
+		.bottle-toggle { transition: background-color 160ms ease; }
+	}
+</style>
+
+<script is:inline>
+	// Bind once and delegate so the control survives Astro ClientRouter swaps and
+	// Tina re-renders (same convention as KrakenEasterEgg.astro).
+	if (!window.__bottleBound) {
+		window.__bottleBound = true;
+
+		// Curated, family-friendly maritime fortunes — sailor sayings, sea wisdom,
+		// and playful "fortunes". Purely client-side; no network, no audio.
+		var FORTUNES = [
+			'Fair winds and following seas await the patient sailor.',
+			'A smooth sea never made a skilled mariner.',
+			'The tide always turns — hold fast and wait for it.',
+			'Trust the stars when the charts run out.',
+			'Calm waters this week; let the sails do the work.',
+			'A lighthouse keeps no record of the ships it guides — give freely.',
+			'What the river hides, the sea finds. Patience reveals all.',
+			'Pack light, voyage far: the sea favours the unburdened.',
+			'Red sky at night, sailor’s delight — good fortune is on the horizon.',
+			'Every anchor must be raised before the journey begins.',
+			'The wise sailor reads the wind, not the wishes.',
+			'A friendly port is worth a hundred miles of open water.',
+			'Mend the net before the shoal arrives.',
+			'Even the smallest boat can cross the widest sea with a steady hand.',
+			'Let go of the harbour, and the ocean will show you the way.',
+			'A barnacle on the hull is just a passenger you didn’t invite — shed it.',
+			'Sing while you row; the work grows lighter and the miles grow short.',
+			'The deepest treasure is a true heading and good company aboard.',
+			'Storms pass. Sailors who keep the wheel pass through them.',
+			'Cast your net wide today — the catch will surprise you.',
+		];
+
+		var lastIndex = -1;
+
+		function pickFortune() {
+			if (FORTUNES.length <= 1) return FORTUNES[0] || '';
+			var i = Math.floor(Math.random() * FORTUNES.length);
+			if (i === lastIndex) i = (i + 1) % FORTUNES.length;
+			lastIndex = i;
+			return FORTUNES[i];
+		}
+
+		function els() {
+			return {
+				toggle: document.getElementById('bottle-toggle'),
+				card: document.getElementById('bottle-card'),
+				fortune: document.getElementById('bottle-fortune'),
+				another: document.getElementById('bottle-another'),
+				close: document.getElementById('bottle-close'),
+			};
+		}
+
+		function isOpen() {
+			var card = document.getElementById('bottle-card');
+			return !!card && !card.hidden;
+		}
+
+		function setFortune() {
+			var e = els();
+			if (e.fortune) e.fortune.textContent = pickFortune();
+		}
+
+		function openCard() {
+			var e = els();
+			if (!e.card || !e.toggle) return;
+			setFortune();
+			e.card.hidden = false;
+			e.toggle.setAttribute('aria-expanded', 'true');
+			// Move focus into the card for keyboard users.
+			if (e.another) e.another.focus();
+		}
+
+		function closeCard(returnFocus) {
+			var e = els();
+			if (!e.card || !e.toggle) return;
+			e.card.hidden = true;
+			e.toggle.setAttribute('aria-expanded', 'false');
+			if (returnFocus !== false) e.toggle.focus();
+		}
+
+		document.addEventListener('click', function (ev) {
+			var t = ev.target;
+			if (t.closest && t.closest('#bottle-close')) {
+				closeCard(true);
+				return;
+			}
+			if (t.closest && t.closest('#bottle-another')) {
+				setFortune();
+				return;
+			}
+			if (t.closest && t.closest('#bottle-toggle')) {
+				if (isOpen()) closeCard(true);
+				else openCard();
+				return;
+			}
+			// Click outside an open card closes it (without stealing focus).
+			if (isOpen() && t.closest && !t.closest('#bottle-card')) {
+				closeCard(false);
+			}
+		});
+
+		document.addEventListener('keydown', function (ev) {
+			if (ev.key === 'Escape' && isOpen()) {
+				closeCard(true);
+			}
+		});
+
+		// Clean up before an Astro route swap so a fresh page starts closed.
+		document.addEventListener('astro:before-swap', function () {
+			closeCard(false);
+		});
+	}
+</script>
