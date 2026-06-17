@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -23,6 +24,7 @@ import GameShell from './GameShell.astro';
 		<button data-snake-dir="right" class="rounded-md border bg-background px-3 py-2 text-sm">▶</button>
 	</div>
 	<button id="snake-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">Restart</button>
+	<Leaderboard game="snake" />
 </GameShell>
 
 <script is:inline>
@@ -61,7 +63,9 @@ import GameShell from './GameShell.astro';
 			// enter — exclude the last segment from the self-collision test unless we're growing.
 			const body = eats ? snake : snake.slice(0, -1);
 			if (head.x < 0 || head.x >= N || head.y < 0 || head.y >= N || body.some((s) => s.x === head.x && s.y === head.y)) {
-				over = true; started = false; statusEl.textContent = 'Game over! Press Restart.'; return;
+				over = true; started = false; statusEl.textContent = 'Game over! Press Restart.';
+				if (score > 0 && window.ArmadaHighScores) window.ArmadaHighScores.recordScore('snake', score, { lowerIsBetter: false });
+				return;
 			}
 			snake.unshift(head);
 			if (eats) {
@@ -69,7 +73,9 @@ import GameShell from './GameShell.astro';
 				// If the snake now fills every cell there is no free square for food — that's a win,
 				// not an infinite placeFood() loop.
 				if (snake.length >= N * N) {
-					over = true; started = false; statusEl.textContent = 'You filled the board — you win! 🎉'; draw(); return;
+					over = true; started = false; statusEl.textContent = 'You filled the board — you win! 🎉'; draw();
+					if (window.ArmadaHighScores) window.ArmadaHighScores.recordScore('snake', score, { lowerIsBetter: false });
+					return;
 				}
 				placeFood();
 			} else snake.pop();

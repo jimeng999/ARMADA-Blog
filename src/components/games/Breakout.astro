@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -15,6 +16,7 @@ import GameShell from './GameShell.astro';
 	></canvas>
 	<p class="text-sm font-medium">Score: <span id="breakout-score">0</span> · Lives: <span id="breakout-lives">3</span> · <span id="breakout-status">Move to start</span></p>
 	<button id="breakout-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">Restart</button>
+	<Leaderboard game="breakout" />
 </GameShell>
 
 <script is:inline>
@@ -54,13 +56,13 @@ import GameShell from './GameShell.astro';
 				const bx = b.c * BW, by = 30 + b.r * (BH + 4);
 				if (ball.x > bx && ball.x < bx + BW - 2 && ball.y > by && ball.y < by + BH) {
 					b.alive = false; ball.dy *= -1; score += 10; scoreEl.textContent = String(score);
-					if (bricks.every((br) => !br.alive)) { over = true; statusEl.textContent = 'You cleared it! 🎉'; }
+					if (bricks.every((br) => !br.alive)) { over = true; statusEl.textContent = 'You cleared it! 🎉'; if (window.ArmadaHighScores) window.ArmadaHighScores.recordScore('breakout', score, { lowerIsBetter: false }); }
 					break; // one bounce per frame — stops the ball tunnelling through two bricks at once
 				}
 			}
 			if (ball.y > H) {
 				lives--; livesEl.textContent = String(lives);
-				if (lives <= 0) { over = true; statusEl.textContent = 'Game over! Press Restart.'; }
+				if (lives <= 0) { over = true; statusEl.textContent = 'Game over! Press Restart.'; if (score > 0 && window.ArmadaHighScores) window.ArmadaHighScores.recordScore('breakout', score, { lowerIsBetter: false }); }
 				else { ball = { x: W / 2, y: H - 40, dx: 2.5, dy: -2.5, r: 6 }; started = false; statusEl.textContent = 'Move to continue'; draw(); return; }
 			}
 			draw();

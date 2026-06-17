@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -31,6 +32,10 @@ import GameShell from './GameShell.astro';
 		<p id="wak-status" class="text-center text-sm text-muted-foreground" role="status">
 			Press Start to release the kraken.
 		</p>
+
+		<div class="flex justify-center">
+			<Leaderboard game="whackakraken" />
+		</div>
 	</div>
 </GameShell>
 
@@ -229,6 +234,8 @@ import GameShell from './GameShell.astro';
 			} else {
 				statusEl.textContent = `Game over — you struck ${score}. Press Restart to dive again.`;
 			}
+			if (score > 0 && window.ArmadaHighScores)
+				window.ArmadaHighScores.recordScore('whackakraken', score, { lowerIsBetter: false });
 			btn.textContent = 'Restart';
 		}
 

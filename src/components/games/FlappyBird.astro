@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -15,6 +16,7 @@ import GameShell from './GameShell.astro';
 	></canvas>
 	<p class="text-sm font-medium">Score: <span id="flappy-score">0</span> · <span id="flappy-status">Tap or press Space to start</span></p>
 	<button id="flappy-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">Restart</button>
+	<Leaderboard game="flappy" />
 </GameShell>
 
 <script is:inline>
@@ -62,6 +64,8 @@ import GameShell from './GameShell.astro';
 			over = true; started = false;
 			cancelAnimationFrame(raf);
 			statusEl.textContent = 'Game over! Press Restart.';
+			if (score > 0 && window.ArmadaHighScores)
+				window.ArmadaHighScores.recordScore('flappy', score, { lowerIsBetter: false });
 		}
 		function draw() {
 			ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);

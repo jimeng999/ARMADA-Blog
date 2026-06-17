@@ -1,0 +1,234 @@
+---
+// Shared, client-side, per-browser high-score leaderboard for a single game.
+//
+// Renders a small "best scores" panel (top N=5) plus a "Clear" control, and
+// wires a global helper API (window.ArmadaHighScores) that every game's inline
+// island can call on game-over. Everything is localStorage-only — no network,
+// no backend, no cross-user data.
+//
+// Props:
+//   game          unique key for this game (e.g. "tetris")
+//   lowerIsBetter true for time-/move-based games where a SMALLER value wins
+//   unit          optional suffix shown after each value (e.g. "moves", "s")
+//   label         optional column heading for the value (default "Score")
+interface Props {
+	game: string;
+	lowerIsBetter?: boolean;
+	unit?: string;
+	label?: string;
+}
+
+const { game, lowerIsBetter = false, unit = '', label = 'Score' } = Astro.props;
+---
+
+<div
+	class="w-full max-w-xs rounded-md border bg-background/60 p-3 text-sm"
+	data-armada-leaderboard={game}
+	data-lower-is-better={lowerIsBetter ? '1' : '0'}
+	data-unit={unit}
+>
+	<div class="mb-1 flex items-center justify-between gap-2">
+		<h3 class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+			Best {label}s (this browser)
+		</h3>
+		<button
+			type="button"
+			data-armada-clear={game}
+			class="rounded border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+		>Clear</button>
+	</div>
+	<ol
+		data-armada-list={game}
+		class="m-0 flex list-none flex-col gap-0.5 p-0 tabular-nums"
+	>
+		<li class="text-muted-foreground">No scores yet — play a round!</li>
+	</ol>
+</div>
+
+<script is:inline>
+	// Define the global high-score API exactly once, even though this component
+	// is included once per game. Framework-free to match the games' inline-island
+	// pattern; robust against malformed/empty/non-array localStorage data.
+	(() => {
+		const KEY = 'armada-highscores-v1';
+		const MAX = 5;
+
+		if (!window.ArmadaHighScores) {
+			function readAll() {
+				try {
+					const raw = localStorage.getItem(KEY);
+					if (!raw) return {};
+					const parsed = JSON.parse(raw);
+					// Top-level must be a plain object map of game -> array.
+					if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+					return parsed;
+				} catch (e) {
+					return {};
+				}
+			}
+
+			function writeAll(map) {
+				try {
+					localStorage.setItem(KEY, JSON.stringify(map));
+				} catch (e) {
+					/* storage full / disabled — fail silently, never break gameplay */
+				}
+			}
+
+			function sanitiseEntry(e) {
+				// Coerce one stored entry into a known shape, or null if unusable.
+				if (!e || typeof e !== 'object') return null;
+				const value = Number(e.value);
+				if (!Number.isFinite(value)) return null;
+				let initials = typeof e.initials === 'string' ? e.initials : '';
+				// Strip to alphanumerics, uppercase, max 3 chars. Never trust stored text.
+				initials = initials.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3);
+				const at = Number(e.at);
+				return { value, initials, at: Number.isFinite(at) ? at : 0 };
+			}
+
+			function sortFor(list, lowerIsBetter) {
+				return list.slice().sort((a, b) =>
+					lowerIsBetter ? a.value - b.value : b.value - a.value);
+			}
+
+			function getScores(game) {
+				if (typeof game !== 'string' || !game) return [];
+				const all = readAll();
+				const raw = all[game];
+				if (!Array.isArray(raw)) return [];
+				return raw.map(sanitiseEntry).filter(Boolean);
+			}
+
+			function sanitiseInitials(initials) {
+				if (typeof initials !== 'string') return '';
+				return initials.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3);
+			}
+
+			function addScore(game, value, initials, opts) {
+				if (typeof game !== 'string' || !game) return [];
+				const num = Number(value);
+				if (!Number.isFinite(num)) return getScores(game);
+				const lowerIsBetter = !!(opts && opts.lowerIsBetter);
+				const clean = sanitiseInitials(initials);
+				const all = readAll();
+				const list = getScores(game);
+				list.push({ value: num, initials: clean, at: Date.now() });
+				const trimmed = sortFor(list, lowerIsBetter).slice(0, MAX);
+				all[game] = trimmed;
+				writeAll(all);
+				return trimmed;
+			}
+
+			function clearScores(game) {
+				if (typeof game !== 'string' || !game) return;
+				const all = readAll();
+				if (all[game] !== undefined) {
+					delete all[game];
+					writeAll(all);
+				}
+			}
+
+			// Convenience used by each game on game-over: record a score, optionally
+			// ask the player for short initials, then refresh that game's panel.
+			// `value` is the numeric score/time; `opts.lowerIsBetter` flips ranking;
+			// `opts.prompt` (default true) asks for initials, falling back to anon.
+			function recordScore(game, value, opts) {
+				const o = opts || {};
+				const num = Number(value);
+				if (!Number.isFinite(num)) return;
+				let initials = '';
+				if (o.prompt !== false && typeof window.prompt === 'function') {
+					let entered = null;
+					try {
+						entered = window.prompt(
+							'New score: ' + num + '\nEnter up to 3 initials for the leaderboard (optional):',
+							'',
+						);
+					} catch (e) {
+						entered = null;
+					}
+					// null = cancelled → store anonymous. Otherwise sanitise.
+					if (entered != null) initials = sanitiseInitials(entered);
+				}
+				addScore(game, num, initials, { lowerIsBetter: !!o.lowerIsBetter });
+				const panel = document.querySelector('[data-armada-leaderboard="' + game + '"]');
+				if (panel) panel.dispatchEvent(new CustomEvent('armada:refresh'));
+			}
+
+			window.ArmadaHighScores = {
+				getScores,
+				addScore,
+				clearScores,
+				sanitiseInitials,
+				recordScore,
+				_max: MAX,
+			};
+		}
+
+		const API = window.ArmadaHighScores;
+
+		// --- Per-instance UI wiring -------------------------------------------
+		document.querySelectorAll('[data-armada-leaderboard]').forEach((panel) => {
+			if (panel.dataset.armadaWired === '1') return;
+			panel.dataset.armadaWired = '1';
+
+			const game = panel.getAttribute('data-armada-leaderboard');
+			const lowerIsBetter = panel.getAttribute('data-lower-is-better') === '1';
+			const unit = panel.getAttribute('data-unit') || '';
+			const list = panel.querySelector('[data-armada-list="' + game + '"]');
+			const clearBtn = panel.querySelector('[data-armada-clear="' + game + '"]');
+
+			function render() {
+				const scores = API.getScores(game);
+				// Defensive re-sort for display (storage is already ordered, but cheap).
+				scores.sort((a, b) => (lowerIsBetter ? a.value - b.value : b.value - a.value));
+				list.textContent = '';
+				if (!scores.length) {
+					const li = document.createElement('li');
+					li.className = 'text-muted-foreground';
+					li.textContent = 'No scores yet — play a round!';
+					list.appendChild(li);
+					return;
+				}
+				scores.slice(0, API._max).forEach((entry, i) => {
+					const li = document.createElement('li');
+					li.className = 'flex items-center justify-between gap-2';
+
+					const left = document.createElement('span');
+					left.className = 'flex items-center gap-2';
+					const rank = document.createElement('span');
+					rank.className = 'w-4 text-right text-muted-foreground';
+					rank.textContent = String(i + 1) + '.';
+					const who = document.createElement('span');
+					who.className = 'font-medium';
+					// Initials rendered via textContent ONLY — never innerHTML — so any
+					// stored text can never be interpreted as HTML.
+					who.textContent = entry.initials || '—';
+					left.appendChild(rank);
+					left.appendChild(who);
+
+					const val = document.createElement('span');
+					val.className = 'font-bold';
+					val.textContent = unit ? entry.value + ' ' + unit : String(entry.value);
+
+					li.appendChild(left);
+					li.appendChild(val);
+					list.appendChild(li);
+				});
+			}
+
+			if (clearBtn) {
+				clearBtn.addEventListener('click', () => {
+					API.clearScores(game);
+					render();
+				});
+			}
+
+			// Let a game ask its own panel to refresh after recording a score.
+			panel.addEventListener('armada:refresh', render);
+
+			render();
+		});
+	})();
+</script>

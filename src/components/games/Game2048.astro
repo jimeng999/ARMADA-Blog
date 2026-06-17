@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -10,6 +11,7 @@ import GameShell from './GameShell.astro';
 	<div id="g2048-board" class="grid grid-cols-4 gap-2 rounded-md border bg-muted p-2 touch-none select-none" style="width:16rem;height:16rem"></div>
 	<p class="text-sm font-medium">Score: <span id="g2048-score">0</span> · <span id="g2048-status">Use arrows / swipe</span></p>
 	<button id="g2048-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">New game</button>
+	<Leaderboard game="game2048" />
 </GameShell>
 
 <script is:inline>
@@ -64,8 +66,8 @@ import GameShell from './GameShell.astro';
 			else if (dir === 'down') { let g = rot(grid).map((r) => slide(r.reverse()).reverse()); grid = rot(g); }
 			if (JSON.stringify(grid) === before) return;
 			add(); scoreEl.textContent = String(score); render();
-			if (won) { statusEl.textContent = 'You reached 2048! 🎉'; over = true; return; }
-			if (!canMove()) { over = true; statusEl.textContent = 'Game over! No moves left.'; }
+			if (won) { statusEl.textContent = 'You reached 2048! 🎉'; over = true; if (window.ArmadaHighScores) window.ArmadaHighScores.recordScore('game2048', score, { lowerIsBetter: false }); return; }
+			if (!canMove()) { over = true; statusEl.textContent = 'Game over! No moves left.'; if (score > 0 && window.ArmadaHighScores) window.ArmadaHighScores.recordScore('game2048', score, { lowerIsBetter: false }); }
 		}
 		function canMove() {
 			for (let y = 0; y < 4; y++)

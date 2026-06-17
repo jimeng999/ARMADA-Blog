@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -22,6 +23,7 @@ import GameShell from './GameShell.astro';
 		<button data-tetris-btn="drop" class="rounded-md border bg-background px-3 py-2 text-sm">⤓</button>
 	</div>
 	<button id="tetris-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">Restart</button>
+	<Leaderboard game="tetris" />
 </GameShell>
 
 <script is:inline>
@@ -61,6 +63,8 @@ import GameShell from './GameShell.astro';
 			if (collides(piece, px, py)) {
 				over = true; started = false;
 				statusEl.textContent = 'Game over! Press Restart.';
+				if (score > 0 && window.ArmadaHighScores)
+					window.ArmadaHighScores.recordScore('tetris', score, { lowerIsBetter: false });
 			}
 		}
 		function collides(p, ox, oy) {

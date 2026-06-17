@@ -1,5 +1,6 @@
 ---
 import GameShell from './GameShell.astro';
+import Leaderboard from './Leaderboard.astro';
 ---
 
 <GameShell
@@ -10,6 +11,7 @@ import GameShell from './GameShell.astro';
 	<div id="mem-board" class="grid grid-cols-4 gap-2 touch-none select-none" style="width:16rem"></div>
 	<p class="text-sm font-medium">Moves: <span id="mem-moves">0</span> · Pairs: <span id="mem-pairs">0</span>/8 · <span id="mem-status">Find the pairs</span></p>
 	<button id="mem-reset" class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent">New game</button>
+	<Leaderboard game="memory" lowerIsBetter unit="moves" label="Move count" />
 </GameShell>
 
 <script is:inline>
@@ -51,7 +53,7 @@ import GameShell from './GameShell.astro';
 			if (deck[first].v === deck[i].v) {
 				deck[first].matched = deck[i].matched = true;
 				first = null; pairs++; pairsEl.textContent = String(pairs);
-				if (pairs === ICONS.length) statusEl.textContent = `Solved in ${moves} moves! 🎉`;
+				if (pairs === ICONS.length) { statusEl.textContent = `Solved in ${moves} moves! 🎉`; if (window.ArmadaHighScores) window.ArmadaHighScores.recordScore('memory', moves, { lowerIsBetter: true }); }
 			} else {
 				lock = true;
 				const f = first; first = null;
