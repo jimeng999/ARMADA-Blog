@@ -75,28 +75,57 @@
 </style>
 
 <script is:inline>
+	// OceanHero lifecycle. Astro's ClientRouter swaps the DOM on SPA navigation
+	// without a full reload, so a hero that only inits on first load would (a)
+	// leak its WebGL context every time you leave the page — quickly hitting the
+	// browser's ~16-context limit — and (b) fail to re-init when you return.
+	//
+	// So we expose init/teardown and drive them off the router lifecycle:
+	//   - astro:page-load   -> (re)initialise (also fires on the initial load)
+	//   - astro:before-swap -> tear down: cancel RAF, drop listeners/observers,
+	//                          and release the GL context via loseContext()
+	// The live instance's teardown is parked on window.__oceanHeroTeardown so a
+	// stray double page-load can't spin up two contexts (guard against double-init).
 	(() => {
-		const root = document.getElementById('ocean-hero');
-		const canvas = document.getElementById('ocean-hero-canvas');
-		if (!root || !canvas) return;
+		function initOceanHero() {
+			const root = document.getElementById('ocean-hero');
+			const canvas = document.getElementById('ocean-hero-canvas');
+			if (!root || !canvas) return;
 
-		const reduceMotion =
-			window.matchMedia &&
-			window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			// Guard against double-init: if an instance is already live (e.g. a
+			// duplicate page-load), tear it down before starting a fresh one.
+			if (window.__oceanHeroTeardown) {
+				try { window.__oceanHeroTeardown(); } catch (_) {}
+				window.__oceanHeroTeardown = null;
+			}
 
-		// --- Acquire a WebGL context; bail to the CSS fallback if unavailable. ---
-		let gl = null;
-		try {
-			gl =
-				canvas.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: false }) ||
-				canvas.getContext('experimental-webgl', { antialias: false, alpha: true });
-		} catch (_) {
-			gl = null;
-		}
-		if (!gl) {
-			// Leave the canvas hidden; the CSS gradient fallback remains visible.
-			return;
-		}
+			const reduceMotion =
+				window.matchMedia &&
+				window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+			// --- Acquire a WebGL context; bail to the CSS fallback if unavailable. ---
+			let gl = null;
+			try {
+				gl =
+					canvas.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: false }) ||
+					canvas.getContext('experimental-webgl', { antialias: false, alpha: true });
+			} catch (_) {
+				gl = null;
+			}
+			if (!gl) {
+				// Leave the canvas hidden; the CSS gradient fallback remains visible.
+				return;
+			}
+
+			// Release the WebGL context and reset the canvas. Used by every exit
+			// path below so a torn-down hero never leaves a context dangling.
+			function releaseGL() {
+				try {
+					const lose = gl.getExtension('WEBGL_lose_context');
+					if (lose) lose.loseContext();
+				} catch (_) {}
+				gl = null;
+			}
 
 		// --- Shaders -----------------------------------------------------------
 		const vertSrc = `
@@ -238,13 +267,13 @@
 
 		const vs = compile(gl.VERTEX_SHADER, vertSrc);
 		const fs = compile(gl.FRAGMENT_SHADER, fragSrc);
-		if (!vs || !fs) return; // compile failure -> CSS fallback stays
+		if (!vs || !fs) { releaseGL(); return; } // compile failure -> CSS fallback stays
 
 		const prog = gl.createProgram();
 		gl.attachShader(prog, vs);
 		gl.attachShader(prog, fs);
 		gl.linkProgram(prog);
-		if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+		if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { releaseGL(); return; }
 		gl.useProgram(prog);
 
 		// Fullscreen triangle.
@@ -295,7 +324,15 @@
 		// --- Reduced motion: a single still frame, no RAF loop. ----------------
 		if (reduceMotion) {
 			drawFrame(8.0); // a pleasant fixed moment
-			window.addEventListener('resize', () => drawFrame(8.0), { passive: true });
+			const onResizeStill = () => drawFrame(8.0);
+			window.addEventListener('resize', onResizeStill, { passive: true });
+			// Teardown for the still path: drop the listener and release GL so
+			// the context isn't leaked across SPA navigation.
+			window.__oceanHeroTeardown = () => {
+				window.removeEventListener('resize', onResizeStill);
+				releaseGL();
+				window.__oceanHeroTeardown = null;
+			};
 			return;
 		}
 
@@ -356,8 +393,9 @@
 		}
 
 		// Pause when the hero scrolls fully out of view (saves battery/CPU).
+		let io = null;
 		if ('IntersectionObserver' in window) {
-			const io = new IntersectionObserver(
+			io = new IntersectionObserver(
 				(entries) => {
 					const visible = entries[0] && entries[0].isIntersecting;
 					if (visible && running) startLoop();
@@ -369,15 +407,45 @@
 		}
 
 		// Pause on tab hide.
-		document.addEventListener('visibilitychange', () => {
+		const onVisibility = () => {
 			if (document.hidden) stopLoop();
 			else if (running) startLoop();
-		});
+		};
+		document.addEventListener('visibilitychange', onVisibility);
 
 		window.addEventListener('resize', resize, { passive: true });
+
+		// Teardown for the animated path: stop the RAF loop, drop every listener
+		// and the observer, then release the GL context. Parked on window so the
+		// router lifecycle (and any double page-load) can reclaim it.
+		window.__oceanHeroTeardown = () => {
+			running = false;
+			stopLoop();
+			if (io) { io.disconnect(); io = null; }
+			document.removeEventListener('visibilitychange', onVisibility);
+			window.removeEventListener('resize', resize);
+			releaseGL();
+			window.__oceanHeroTeardown = null;
+		};
 
 		// Kick off.
 		running = true;
 		rafId = requestAnimationFrame(loop);
+		}
+
+		// --- Router lifecycle wiring (bound once) ------------------------------
+		// astro:page-load fires on the initial load AND after every ClientRouter
+		// swap, so it's the single entry point for (re)initialisation. We bind the
+		// lifecycle listeners once (guarded) and let initOceanHero handle re-runs.
+		if (!window.__oceanHeroLifecycleBound) {
+			window.__oceanHeroLifecycleBound = true;
+			document.addEventListener('astro:page-load', initOceanHero);
+			document.addEventListener('astro:before-swap', () => {
+				if (window.__oceanHeroTeardown) {
+					try { window.__oceanHeroTeardown(); } catch (_) {}
+					window.__oceanHeroTeardown = null;
+				}
+			});
+		}
 	})();
 </script>
