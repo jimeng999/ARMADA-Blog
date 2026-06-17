@@ -1,0 +1,46 @@
+---
+title: Logbook, the fleet's voyage record
+description: Logbook turns a shipped feature into a short, narrated, chaptered walkthrough video and attaches it to the pull request, so stakeholders can watch the change instead of reading the diff.
+pubDate: 2026-06-05T10:00:00.000Z
+heroImage: /blog-placeholder-3.jpg
+---
+
+Every ship keeps a logbook. It is the record of where the vessel went, what it did, and what the crew saw along the way, written so that someone who was not aboard can still follow the voyage. In ARMADA that record is `logbook`: the skill that takes a change the fleet has just shipped and turns it into a short, narrated walkthrough video for the people who care about the outcome rather than the code.
+
+It is the answer to a quiet problem with autonomous building. The fleet can take an issue from a label all the way to a merge-ready pull request without anyone watching, but a product owner still has to understand what actually changed. A diff is the wrong artefact for that. `logbook` produces the right one: something you can watch in a couple of minutes and immediately grasp.
+
+## A walkthrough, not a wall of code
+
+When a user-visible feature ships, `logbook` records a guided tour of it. The output is a single video that walks through the change the way you would demo it to a stakeholder: here is the new screen, here is what you do with it, here is what happens, here is why it matters. It is deliberately product-owner-facing. The goal is not to show how the feature is built but to show what it now lets someone do.
+
+That framing changes everything about the result. Instead of a reviewer reading a pull request and trying to picture the behaviour, the person who asked for the work can simply watch the behaviour. For changes that are harder to read than to watch, which is most user-facing changes, that is a far better trade.
+
+## Chaptered and narrated
+
+A good demo has structure, so `logbook` plans the walkthrough as a small set of chapters, typically three to six, each covering one product-facing beat of the change. The chapters give the video a shape: a beginning that sets up what the feature is, a middle that shows it working, and an end that lands the point. Nobody has to sit through an unstructured screen recording hunting for the moment that matters.
+
+Each chapter is narrated. The skill drives a text-to-speech pipeline to speak the explanation aloud over the footage, so the video carries its own commentary rather than relying on the viewer to infer what they are looking at. The narration pipeline is provider-pluggable and keyed by environment configuration, and it caches by content hash, so re-recording an unchanged chapter does not pay to synthesise the same audio twice. The chapters are then muxed together into one finished video.
+
+## Delivered where the work lives
+
+A walkthrough nobody can find is no use, so `logbook` delivers the video to the pull request itself. It uploads the finished file as a per-PR release asset and then comments the link on the pull request. The walkthrough lands exactly where the review is already happening, attached to the specific change it describes, rather than in some separate folder a reviewer has to be told about.
+
+This per-PR delivery is what makes the record genuinely useful over time. Each pull request carries its own voyage entry. Months later, the history of what shipped is not just a list of merge commits but a series of narrated tours you can reopen and rewatch, each one tied to the change it documents.
+
+## Stack-agnostic by design
+
+The fleet does not assume your stack, and neither does `logbook`. On its first use in a repository it establishes a reusable staging recipe, a small set of instructions for how to launch the app, get it into the right state, and reach the part of it the walkthrough needs to show. That recipe is saved and reused on later runs, so the cost of figuring out how to drive your particular project is paid once.
+
+Because the recipe launches the application through the repository's own run command, the same skill can record very different things. It handles web user interfaces, command-line tools and terminal interfaces, and APIs, adapting the walkthrough to whatever kind of thing the project actually is. You do not configure a framework; you configure how your app starts, and `logbook` works from there.
+
+## Best-effort and out of the way
+
+The most important design choice in `logbook` is that it never gets in the way. Recording a walkthrough is a best-effort, side-channel step that runs after the real work is done. It happens once the builder has already opened the pull request and handed off, so it cannot block or delay the change reaching review.
+
+That matters because video tooling is fussy. A missing component in the recording toolchain, an environment without audio synthesis, a render that comes out degraded, none of these should ever be allowed to fail a build or hold up a merge. So `logbook` swallows its own errors. If the full toolchain is present it produces a polished narrated video; if pieces are missing it degrades gracefully, falling back to captions over still frames rather than failing outright. Whatever happens, it reports what it attempted as a follow-up note and the fleet carries on. The voyage record is a bonus on top of the work, never a gate in front of it.
+
+## When it runs
+
+You can ask for a walkthrough directly with phrases like "record a walkthrough", "make a demo video", or "record a done video for PR X". More often, though, `logbook` runs on its own. The builder, [shipwright](/blog/shipwright-the-builder/), can hand off to it automatically for user-visible features, so the narrated tour appears on the pull request without anyone asking.
+
+That is the whole idea. The fleet already turns a labelled issue into a reviewed, merge-ready pull request. `logbook` adds the last piece a stakeholder actually wants: not the code that changed, but a short, clear voyage record of what it now does. For how all of these pieces fit together, start back at the [ARMADA overview](/blog/armada-overview/).
