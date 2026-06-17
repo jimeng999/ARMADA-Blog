@@ -78,7 +78,7 @@
 	--secondary: oklch(0.91 0.026 88);            /* rope / canvas */
 	--secondary-foreground: oklch(0.30 0.05 255); /* navy */
 	--muted: oklch(0.92 0.022 88);
-	--muted-foreground: oklch(0.42 0.04 250);     /* muted navy-slate */
+	--muted-foreground: oklch(0.40 0.045 250);    /* muted navy-slate — darkened for WCAG AA */
 	--accent: oklch(0.86 0.05 80);                /* soft brass wash */
 	--accent-foreground: oklch(0.30 0.05 255);
 	--destructive: oklch(0.52 0.20 27);           /* signal-flag red */
@@ -174,7 +174,7 @@
 	--secondary: oklch(0.92 0.05 175);            /* shallow surf */
 	--secondary-foreground: oklch(0.30 0.06 220);
 	--muted: oklch(0.93 0.035 120);               /* warm sand wash */
-	--muted-foreground: oklch(0.42 0.05 215);     /* muted lagoon */
+	--muted-foreground: oklch(0.40 0.055 215);    /* muted lagoon — darkened for WCAG AA */
 	--accent: oklch(0.84 0.09 55);                /* sun coral wash */
 	--accent-foreground: oklch(0.30 0.06 220);
 	--destructive: oklch(0.52 0.20 27);           /* coral red */
