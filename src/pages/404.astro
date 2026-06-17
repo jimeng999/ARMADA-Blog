@@ -1,17 +1,236 @@
 ---
 import Base from '../layouts/Base.astro';
-import Starfield from '../components/space/Starfield.astro';
 import Button from '../components/ui/Button.astro';
+
+const ports = [
+	{ href: '/blog', label: 'The Blog', hint: 'Logs from the voyage' },
+	{ href: '/games', label: 'The Games Deck', hint: 'Idle away a watch' },
+	{ href: '/shanties', label: 'The Shanties', hint: 'A song for the haul' },
+];
 ---
-<Base title="Lost in space (404)" description="This page drifted out of orbit.">
-	<section class="relative flex min-h-[70vh] items-center justify-center overflow-hidden px-6 text-center">
-		<Starfield count={90} class="text-foreground/20" />
-		<div class="relative flex flex-col items-center">
-			<img src="/armada-hero.svg" alt="" aria-hidden="true" width="160" height="160" class="mb-6 size-40 rounded-full object-cover" />
-			<p class="text-sm font-medium tracking-widest text-primary uppercase">Error 404</p>
-			<h1 class="mt-2 text-4xl font-semibold tracking-tight lg:text-5xl">Lost in space</h1>
-			<p class="mx-auto mt-4 max-w-md text-muted-foreground">This page drifted out of orbit. Let's get you back to mission control.</p>
-			<Button href="/" class="mt-8">Back to home</Button>
+
+<Base
+	title="Lost at sea (404)"
+	description="Ye've sailed off the edge of the map — 404, lost at sea. Chart a course back to port."
+>
+	<section class="plank-404 relative flex min-h-[75vh] flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
+		<!-- Themed "walk the plank" scene. Pure inline SVG + CSS; uses currentColor and
+		     theme tokens so it adapts to light / dark / storm / tropical. -->
+		<div class="scene" role="img" aria-label="A castaway teeters at the end of a plank over a choppy sea while a hungry shark circles below.">
+			<svg viewBox="0 0 320 200" width="320" height="200" class="scene-svg" aria-hidden="true" focusable="false">
+				<!-- Sea -->
+				<g class="sea">
+					<path class="wave wave-back" d="M-40 150 q 20 -10 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 V210 H-40 Z" />
+					<path class="wave wave-front" d="M-40 162 q 24 -12 48 0 t 48 0 t 48 0 t 48 0 t 48 0 t 48 0 t 48 0 V210 H-40 Z" />
+				</g>
+
+				<!-- Plank jutting out from the left -->
+				<g class="ship-edge">
+					<rect x="-10" y="92" width="60" height="60" rx="4" class="hull" />
+					<rect x="-10" y="86" width="64" height="10" rx="3" class="rail" />
+				</g>
+				<g class="plank-group">
+					<rect x="40" y="118" width="120" height="12" rx="3" class="plank" />
+					<rect x="40" y="116" width="120" height="3" rx="1.5" class="plank-edge" />
+				</g>
+
+				<!-- Castaway teetering at the end of the plank -->
+				<g class="castaway">
+					<!-- arms flailing -->
+					<path class="limb arm-left" d="M150 96 q -14 -10 -22 -20" />
+					<path class="limb arm-right" d="M162 96 q 16 -8 26 -16" />
+					<!-- legs -->
+					<path class="limb leg-left" d="M152 116 l -6 14" />
+					<path class="limb leg-right" d="M160 116 l 6 14" />
+					<!-- body -->
+					<rect x="148" y="92" width="16" height="28" rx="7" class="body" />
+					<!-- head -->
+					<circle cx="156" cy="84" r="9" class="head" />
+					<!-- pirate hat -->
+					<path class="hat" d="M144 80 q 12 -12 24 0 q -12 -5 -24 0 Z" />
+				</g>
+
+				<!-- Circling shark fin -->
+				<g class="shark">
+					<path class="fin" d="M210 150 q 10 -22 20 0 q -10 -4 -20 0 Z" />
+				</g>
+			</svg>
 		</div>
+
+		<p class="mt-2 text-sm font-medium tracking-widest text-primary uppercase">Error 404 · Off the chart</p>
+		<h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance lg:text-5xl">
+			Ye've sailed off the edge of the map
+		</h1>
+		<p class="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
+			This page has gone overboard — lost at sea with no chart to find it. Steady
+			yerself on the plank, sailor: there's no port at this heading. Best haul about
+			and set a fresh course for safer waters.
+		</p>
+
+		<Button href="/" size="lg" class="mt-8">⚓ Back to port</Button>
+
+		<nav class="mt-10 w-full max-w-2xl" aria-label="Popular destinations">
+			<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">Or chart a course for…</p>
+			<ul class="grid gap-3 sm:grid-cols-3">
+				{ports.map((port) => (
+					<li>
+						<a
+							href={port.href}
+							class="group flex h-full flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-primary hover:bg-accent"
+						>
+							<span class="font-medium text-card-foreground group-hover:text-accent-foreground">{port.label}</span>
+							<span class="text-sm text-muted-foreground group-hover:text-accent-foreground/80">{port.hint}</span>
+						</a>
+					</li>
+				))}
+			</ul>
+		</nav>
 	</section>
 </Base>
+
+<style>
+	.plank-404 {
+		/* A faint horizon wash so the scene reads as sea, drawn from theme tokens. */
+		background:
+			linear-gradient(
+				to bottom,
+				transparent 0%,
+				transparent 55%,
+				color-mix(in oklch, var(--primary) 8%, transparent) 100%
+			);
+	}
+
+	.scene {
+		margin-bottom: 1.5rem;
+		color: var(--foreground);
+	}
+
+	.scene-svg {
+		width: min(100%, 320px);
+		height: auto;
+	}
+
+	/* --- Sea --- */
+	.sea .wave {
+		fill: none;
+		stroke: var(--primary);
+		stroke-width: 3;
+		stroke-linecap: round;
+		opacity: 0.55;
+	}
+	.wave-back {
+		opacity: 0.3;
+	}
+
+	/* --- Ship edge --- */
+	.hull {
+		fill: color-mix(in oklch, var(--foreground) 70%, var(--background));
+	}
+	.rail {
+		fill: var(--primary);
+	}
+
+	/* --- Plank --- */
+	.plank {
+		fill: color-mix(in oklch, var(--accent) 70%, var(--foreground) 30%);
+	}
+	.plank-edge {
+		fill: color-mix(in oklch, var(--foreground) 40%, transparent);
+	}
+
+	/* --- Castaway --- */
+	.body {
+		fill: var(--primary);
+	}
+	.head {
+		fill: color-mix(in oklch, var(--accent) 60%, var(--foreground) 10%);
+	}
+	.hat {
+		fill: color-mix(in oklch, var(--foreground) 80%, var(--background));
+	}
+	.limb {
+		fill: none;
+		stroke: var(--primary);
+		stroke-width: 4;
+		stroke-linecap: round;
+	}
+
+	/* --- Shark --- */
+	.fin {
+		fill: color-mix(in oklch, var(--foreground) 55%, var(--background));
+		opacity: 0.85;
+	}
+
+	/* --- Motion --- */
+	.castaway {
+		transform-box: fill-box;
+		transform-origin: 156px 130px; /* pivot near the plank end */
+		animation: teeter 2.8s ease-in-out infinite;
+	}
+	.arm-left {
+		transform-box: fill-box;
+		transform-origin: right bottom;
+		animation: flail 0.9s ease-in-out infinite alternate;
+	}
+	.arm-right {
+		transform-box: fill-box;
+		transform-origin: left bottom;
+		animation: flail 0.9s ease-in-out infinite alternate-reverse;
+	}
+	.plank-group {
+		transform-box: fill-box;
+		transform-origin: left center;
+		animation: bend 2.8s ease-in-out infinite;
+	}
+	.wave-front {
+		animation: drift 3.5s linear infinite;
+	}
+	.wave-back {
+		animation: drift 5s linear infinite reverse;
+	}
+	.shark {
+		transform-box: fill-box;
+		transform-origin: 220px 150px;
+		animation: circle 6s ease-in-out infinite;
+	}
+
+	@keyframes teeter {
+		0%, 100% { transform: rotate(-7deg); }
+		50% { transform: rotate(7deg); }
+	}
+	@keyframes bend {
+		0%, 100% { transform: rotate(0deg); }
+		50% { transform: rotate(2.5deg); }
+	}
+	@keyframes flail {
+		from { transform: rotate(-12deg); }
+		to { transform: rotate(14deg); }
+	}
+	@keyframes drift {
+		from { transform: translateX(0); }
+		to { transform: translateX(-48px); }
+	}
+	@keyframes circle {
+		0%, 100% { transform: translateX(0) scaleX(1); }
+		49% { transform: translateX(-90px) scaleX(1); }
+		50% { transform: translateX(-90px) scaleX(-1); }
+		99% { transform: translateX(0) scaleX(-1); }
+	}
+
+	/* Respect reduced-motion: freeze the scene into a static, still tableau. */
+	@media (prefers-reduced-motion: reduce) {
+		.castaway,
+		.arm-left,
+		.arm-right,
+		.plank-group,
+		.wave-front,
+		.wave-back,
+		.shark {
+			animation: none;
+		}
+		/* A gentle lean so the static frame still reads as "teetering". */
+		.castaway {
+			transform: rotate(5deg);
+		}
+	}
+</style>
