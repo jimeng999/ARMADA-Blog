@@ -66,6 +66,26 @@
 			);
 		opacity: 0.7;
 	}
+	/* Tropical theme ("sun-bleached lagoon"): a bright turquoise-to-sand wash
+	   for the no-WebGL fallback. Tropical is a light-derived preset, so without
+	   this rule it fell through to the default (cool-blue) light fallback above —
+	   the wrong palette, which read as out of alignment against the warm lagoon
+	   theme. This mirrors the LIGHT fallback's geometry exactly (same radial
+	   position 50% 8% / transparent 60%, same 4-stop vertical wash, same
+	   opacity: 0.55) so positioning/sizing is identical to the other themes — only
+	   the palette is swapped to the lagoon's turquoise/sand. */
+	:global([data-theme='tropical']) .ocean-hero__fallback {
+		background:
+			radial-gradient(120% 80% at 50% 8%, oklch(0.92 0.05 200 / 0.9), transparent 60%),
+			linear-gradient(
+				to bottom,
+				oklch(0.95 0.045 110) 0%,
+				oklch(0.88 0.07 195) 42%,
+				oklch(0.68 0.10 200) 56%,
+				oklch(0.5 0.105 205) 100%
+			);
+		opacity: 0.55;
+	}
 	/* Storm theme: a darker, desaturated overcast wash for the no-WebGL fallback,
 	   so the CSS-only path also reads stormy when "Tempest watch" is active. */
 	:global([data-theme='storm']) .ocean-hero__fallback {
