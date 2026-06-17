@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import { getConfig } from '../lib/data';
+import ShipBuilder from '../components/shipyard/ShipBuilder.astro';
+
+const config = (await getConfig()).data?.config ?? null;
+---
+
+<Base
+	title={`Shipyard · ${config?.seo?.title ?? 'TinaCMS + Astro'}`}
+	description="Design your own pirate ship — pick a hull, masts, figurehead and flag colours — then save her to a ship yard that lives entirely in your browser."
+>
+	<main class="mx-auto max-w-6xl px-6 py-12">
+		<header class="mb-8 flex flex-col gap-3">
+			<h1 class="text-4xl font-semibold tracking-tight">Shipyard</h1>
+			<p class="max-w-2xl text-muted-foreground">
+				Welcome to the drydock, captain. Choose a hull, rig her masts and sails,
+				mount a figurehead and run up your colours — the preview updates as you go.
+				Christen your ship and save her to the yard. Everything here is built and
+				stored entirely in <em>your</em> browser — no accounts, no servers, no
+				crew but you.
+			</p>
+		</header>
+
+		<ShipBuilder />
+	</main>
+</Base>

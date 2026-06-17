@@ -1,0 +1,399 @@
+---
+// Self-contained, client-side pirate ship builder + local ship yard.
+// No backend, no shared store — every ship lives only in this browser's
+// localStorage. Ships are composed from SVG part templates so hulls, masts,
+// figureheads and flag colours can be varied independently and re-rendered
+// from a saved config. Matches the games island pattern: scoped markup,
+// theme-aware colours via CSS variables, and a single inline IIFE script
+// that re-binds itself on Astro client-router swaps.
+---
+
+<section
+	id="shipyard"
+	class="flex scroll-mt-24 flex-col gap-6 rounded-xl border bg-card p-5 text-card-foreground shadow-sm"
+>
+	<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+		<!-- LIVE PREVIEW -->
+		<div class="flex flex-col gap-3">
+			<h2 class="text-xl font-semibold tracking-tight">Drydock — live preview</h2>
+			<div
+				class="flex items-center justify-center rounded-lg border bg-background p-4"
+				style="background-image:linear-gradient(180deg, color-mix(in srgb, var(--primary) 8%, transparent), transparent);"
+			>
+				<div id="sb-preview" class="w-full max-w-md" aria-live="polite" aria-label="Ship preview"></div>
+			</div>
+		</div>
+
+		<!-- BUILDER CONTROLS -->
+		<form id="sb-form" class="flex flex-col gap-4" aria-label="Customise your ship">
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-semibold">Hull</legend>
+				<div id="sb-opt-hull" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Hull style"></div>
+			</fieldset>
+
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-semibold">Masts &amp; sails</legend>
+				<div id="sb-opt-mast" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Mast and sail style"></div>
+			</fieldset>
+
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-semibold">Figurehead</legend>
+				<div id="sb-opt-figurehead" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Figurehead style"></div>
+			</fieldset>
+
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-semibold">Flag colours</legend>
+				<div class="flex flex-wrap items-center gap-4">
+					<label class="flex items-center gap-2 text-sm">
+						<span>Field</span>
+						<input id="sb-flag-1" type="color" value="#1a1a1a" class="h-8 w-10 cursor-pointer rounded border bg-background" aria-label="Flag field colour" />
+					</label>
+					<label class="flex items-center gap-2 text-sm">
+						<span>Emblem</span>
+						<input id="sb-flag-2" type="color" value="#f5f5f5" class="h-8 w-10 cursor-pointer rounded border bg-background" aria-label="Flag emblem colour" />
+					</label>
+				</div>
+			</fieldset>
+
+			<fieldset class="flex flex-col gap-2">
+				<legend class="text-sm font-semibold">Christen your ship</legend>
+				<input
+					id="sb-name"
+					type="text"
+					maxlength="40"
+					placeholder="The Salty Kraken"
+					autocomplete="off"
+					class="rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+					aria-label="Ship name"
+				/>
+				<p id="sb-msg" class="min-h-4 text-xs text-muted-foreground" role="status" aria-live="polite"></p>
+			</fieldset>
+
+			<button
+				id="sb-save"
+				type="submit"
+				class="rounded-md border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+			>Save to the yard ⚓</button>
+		</form>
+	</div>
+
+	<!-- SHIP YARD -->
+	<div class="flex flex-col gap-3 border-t pt-5">
+		<h2 class="text-xl font-semibold tracking-tight">Your ship yard</h2>
+		<p class="text-sm text-muted-foreground">
+			Ships you have built in <em>this</em> browser. Click a ship to set her sailing —
+			tap again or use the Delete button to send her to the depths.
+		</p>
+		<div id="sb-yard" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+		<p id="sb-yard-empty" class="text-sm text-muted-foreground">
+			No ships yet — design one above and save her to the yard.
+		</p>
+	</div>
+</section>
+
+<style>
+	/* Selected option chip */
+	#shipyard .sb-opt[aria-checked="true"] {
+		border-color: var(--primary);
+		background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+		color: var(--foreground);
+	}
+	/* Click-to-sail animation (disabled under reduced motion below) */
+	@keyframes sb-bob {
+		0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+		50% { transform: translateY(-6px) rotate(1.2deg); }
+	}
+	@keyframes sb-puff {
+		0% { opacity: 0; transform: translate(0, 0) scale(0.3); }
+		30% { opacity: 0.9; }
+		100% { opacity: 0; transform: translate(26px, -10px) scale(1.6); }
+	}
+	#shipyard .sb-sailing .sb-ship-svg { animation: sb-bob 1.1s ease-in-out 0s 3; transform-origin: 50% 80%; }
+	#shipyard .sb-sailing .sb-puff { animation: sb-puff 0.9s ease-out 0s 2; }
+	#shipyard .sb-puff { opacity: 0; }
+	@media (prefers-reduced-motion: reduce) {
+		#shipyard .sb-sailing .sb-ship-svg,
+		#shipyard .sb-sailing .sb-puff { animation: none !important; }
+		/* Static fallback: a gentle, immediate tilt instead of motion */
+		#shipyard .sb-sailing .sb-ship-svg { transform: rotate(-2deg); }
+	}
+</style>
+
+<script is:inline>
+	(() => {
+		const root = document.getElementById('shipyard');
+		if (!root || root.dataset.bound === '1') return;
+		root.dataset.bound = '1';
+
+		const STORE_KEY = 'armada-shipyard-v1';
+
+		// ---- Part catalogues. Each entry knows how to draw itself as SVG. ----
+		const HULLS = {
+			galleon: { label: 'Galleon', wood: '#6b4423', trim: '#caa472' },
+			sloop: { label: 'Sloop', wood: '#7a5230', trim: '#d8b483' },
+			frigate: { label: 'Frigate', wood: '#5a3a1e', trim: '#b98c52' },
+			ironclad: { label: 'Ironclad', wood: '#4b5563', trim: '#9ca3af' },
+		};
+		const MASTS = {
+			single: { label: 'Single mast' },
+			double: { label: 'Twin masts' },
+			triple: { label: 'Three masts' },
+			tattered: { label: 'Tattered sails' },
+		};
+		const FIGUREHEADS = {
+			mermaid: { label: 'Mermaid' },
+			dragon: { label: 'Dragon' },
+			eagle: { label: 'Eagle' },
+			skull: { label: 'Skull' },
+			none: { label: 'None' },
+		};
+
+		const HULL_KEYS = Object.keys(HULLS);
+		const MAST_KEYS = Object.keys(MASTS);
+		const FIG_KEYS = Object.keys(FIGUREHEADS);
+
+		// ---- SVG builders. Pure functions of the config → SVG string. ----
+		function sailPath(mast, sailColor) {
+			// Returns markup for masts + sails depending on the mast option.
+			const mastWood = '#4a3214';
+			const tattered = mast === 'tattered';
+			const sailFill = tattered ? '#cfc5b0' : (sailColor || '#f3ede0');
+			function rig(x) {
+				const sail = tattered
+					? `<path d="M${x} 58 L${x} 118 L${x - 30} 110 L${x - 22} 88 L${x - 32} 70 Z" fill="${sailFill}" stroke="#8a7c5e" stroke-width="1.5"/>`
+					: `<path d="M${x} 56 Q${x - 34} 88 ${x} 120 Z" fill="${sailFill}" stroke="#cbbf9c" stroke-width="1.5"/>
+					   <path d="M${x} 56 Q${x + 34} 88 ${x} 120 Z" fill="color-mix(in srgb, ${sailFill} 85%, #000)" stroke="#cbbf9c" stroke-width="1.5"/>`;
+				return `<line x1="${x}" y1="50" x2="${x}" y2="150" stroke="${mastWood}" stroke-width="4" stroke-linecap="round"/>${sail}`;
+			}
+			if (mast === 'single' || mast === 'tattered') return rig(150);
+			if (mast === 'double') return rig(118) + rig(182);
+			return rig(104) + rig(150) + rig(196); // triple
+		}
+
+		function figureheadSvg(kind, color) {
+			const c = color || '#caa472';
+			if (kind === 'none') return '';
+			// Drawn at the bow (right side, ~x=262, y=150)
+			const t = 'translate(258 150)';
+			switch (kind) {
+				case 'mermaid':
+					return `<g transform="${t}"><path d="M0 -10 q14 2 18 14 q-6 8 -16 6 q-8 -2 -6 -12 z" fill="${c}"/><circle cx="6" cy="-12" r="5" fill="${c}"/></g>`;
+				case 'dragon':
+					return `<g transform="${t}"><path d="M0 -8 q20 -6 26 6 q-4 6 -12 4 l6 8 l-12 -4 q-12 -4 -8 -14 z" fill="${c}"/></g>`;
+				case 'eagle':
+					return `<g transform="${t}"><path d="M0 -6 q16 -10 22 0 q-8 2 -10 8 q10 0 12 6 q-16 4 -24 -6 z" fill="${c}"/></g>`;
+				case 'skull':
+					return `<g transform="${t}"><circle cx="12" cy="-2" r="9" fill="${c}"/><circle cx="9" cy="-3" r="2" fill="#222"/><circle cx="15" cy="-3" r="2" fill="#222"/></g>`;
+				default:
+					return '';
+			}
+		}
+
+		function flagSvg(colors) {
+			const field = (colors && colors[0]) || '#1a1a1a';
+			const emblem = (colors && colors[1]) || '#f5f5f5';
+			// Jolly-Roger style pennant at the top of the centre mast.
+			return `<g class="sb-flag">
+				<rect x="150" y="44" width="46" height="26" fill="${field}" stroke="#00000033" stroke-width="1"/>
+				<circle cx="168" cy="56" r="6" fill="${emblem}"/>
+				<rect x="164" y="61" width="8" height="5" rx="1" fill="${emblem}"/>
+				<rect x="156" y="62" width="24" height="3" rx="1.5" fill="${emblem}" transform="rotate(18 168 63)"/>
+				<rect x="156" y="62" width="24" height="3" rx="1.5" fill="${emblem}" transform="rotate(-18 168 63)"/>
+			</g>`;
+		}
+
+		function shipSvg(cfg, opts) {
+			const hull = HULLS[cfg.parts.hull] || HULLS.galleon;
+			const interactive = opts && opts.interactive;
+			const puff = interactive
+				? `<circle class="sb-puff" cx="60" cy="150" r="9" fill="#e5e7ebcc"/>
+				   <circle class="sb-puff" cx="48" cy="156" r="6" fill="#e5e7ebaa"/>`
+				: '';
+			return `<svg class="sb-ship-svg" viewBox="0 0 300 220" width="100%" role="img" aria-label="${esc(cfg.name || 'Custom pirate ship')}" preserveAspectRatio="xMidYMid meet">
+				<!-- sea -->
+				<path d="M0 188 q40 -10 75 0 t75 0 t75 0 t75 0 V220 H0 Z" fill="color-mix(in srgb, var(--primary) 22%, #1e3a5f)"/>
+				<path d="M0 198 q40 8 75 0 t75 0 t75 0 t75 0 V220 H0 Z" fill="color-mix(in srgb, var(--primary) 35%, #0f2740)"/>
+				${flagSvg(cfg.flagColors)}
+				${sailPath(cfg.parts.mast, cfg.sailColor)}
+				<!-- hull -->
+				<path d="M40 150 H260 L238 188 H62 Z" fill="${hull.wood}" stroke="#2c1c0c" stroke-width="2"/>
+				<rect x="50" y="158" width="200" height="9" fill="${hull.trim}" opacity="0.85"/>
+				<circle cx="92" cy="170" r="6" fill="#1c130888"/>
+				<circle cx="128" cy="170" r="6" fill="#1c130888"/>
+				<circle cx="164" cy="170" r="6" fill="#1c130888"/>
+				<circle cx="200" cy="170" r="6" fill="#1c130888"/>
+				${figureheadSvg(cfg.parts.figurehead, hull.trim)}
+				${puff}
+			</svg>`;
+		}
+
+		// ---- Helpers ----
+		function esc(s) {
+			return String(s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+		}
+
+		// ---- Profanity filter (small client-side list; masks matches) ----
+		const BAD_WORDS = ['arse', 'ass', 'bastard', 'bitch', 'bollocks', 'bugger', 'crap', 'damn', 'dick', 'shit', 'piss', 'fuck', 'cunt', 'wanker', 'twat', 'prick', 'slut', 'whore'];
+		const BAD_RE = new RegExp('\\b(' + BAD_WORDS.join('|') + ')\\b', 'gi');
+		function cleanName(raw) {
+			let name = (raw || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+			const hadProfanity = BAD_RE.test(name);
+			BAD_RE.lastIndex = 0;
+			const masked = name.replace(BAD_RE, (m) => m[0] + '*'.repeat(Math.max(1, m.length - 1)));
+			return { name: masked, hadProfanity, empty: name.length === 0 };
+		}
+
+		// ---- Storage (guarded against malformed/empty data) ----
+		function load() {
+			try {
+				const raw = localStorage.getItem(STORE_KEY);
+				if (!raw) return [];
+				const arr = JSON.parse(raw);
+				if (!Array.isArray(arr)) return [];
+				return arr.filter((s) =>
+					s && typeof s === 'object' && typeof s.id === 'string' &&
+					s.parts && typeof s.parts === 'object'
+				).map(normalise);
+			} catch { return []; }
+		}
+		function normalise(s) {
+			return {
+				id: s.id,
+				name: typeof s.name === 'string' ? s.name : 'Unnamed',
+				parts: {
+					hull: HULL_KEYS.includes(s.parts.hull) ? s.parts.hull : 'galleon',
+					mast: MAST_KEYS.includes(s.parts.mast) ? s.parts.mast : 'single',
+					figurehead: FIG_KEYS.includes(s.parts.figurehead) ? s.parts.figurehead : 'none',
+				},
+				flagColors: Array.isArray(s.flagColors) ? s.flagColors.slice(0, 2).map(String) : ['#1a1a1a', '#f5f5f5'],
+				sailColor: typeof s.sailColor === 'string' ? s.sailColor : '#f3ede0',
+			};
+		}
+		function save(ships) {
+			try { localStorage.setItem(STORE_KEY, JSON.stringify(ships)); } catch {}
+		}
+
+		// ---- Current builder state ----
+		const current = {
+			parts: { hull: 'galleon', mast: 'triple', figurehead: 'mermaid' },
+			flagColors: ['#1a1a1a', '#f5f5f5'],
+			sailColor: '#f3ede0',
+			name: '',
+		};
+
+		const previewEl = document.getElementById('sb-preview');
+		const msgEl = document.getElementById('sb-msg');
+		const nameEl = document.getElementById('sb-name');
+		const flag1 = document.getElementById('sb-flag-1');
+		const flag2 = document.getElementById('sb-flag-2');
+		const yardEl = document.getElementById('sb-yard');
+		const emptyEl = document.getElementById('sb-yard-empty');
+
+		// ---- Option chip rendering ----
+		function buildOptions(containerId, catalogue, partKey) {
+			const wrap = document.getElementById(containerId);
+			wrap.innerHTML = '';
+			Object.entries(catalogue).forEach(([key, meta]) => {
+				const b = document.createElement('button');
+				b.type = 'button';
+				b.className = 'sb-opt rounded-full border bg-background px-3 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none';
+				b.textContent = meta.label;
+				b.setAttribute('role', 'radio');
+				b.setAttribute('aria-checked', current.parts[partKey] === key ? 'true' : 'false');
+				b.addEventListener('click', () => {
+					current.parts[partKey] = key;
+					wrap.querySelectorAll('.sb-opt').forEach((el) => el.setAttribute('aria-checked', 'false'));
+					b.setAttribute('aria-checked', 'true');
+					renderPreview();
+				});
+				wrap.appendChild(b);
+			});
+		}
+
+		function renderPreview() {
+			current.flagColors = [flag1.value, flag2.value];
+			previewEl.innerHTML = shipSvg(current, { interactive: false });
+		}
+
+		// ---- Yard rendering ----
+		function renderYard() {
+			const ships = load();
+			yardEl.innerHTML = '';
+			emptyEl.hidden = ships.length > 0;
+			ships.forEach((ship) => {
+				const card = document.createElement('div');
+				card.className = 'flex flex-col gap-2 rounded-lg border bg-background p-3';
+				const figure = document.createElement('button');
+				figure.type = 'button';
+				figure.className = 'rounded-md border bg-card p-2 transition-transform focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none';
+				figure.setAttribute('aria-label', 'Set ' + ship.name + ' sailing');
+				figure.innerHTML = shipSvg(ship, { interactive: true });
+				figure.addEventListener('click', () => {
+					figure.classList.remove('sb-sailing');
+					void figure.offsetWidth; // restart animation
+					figure.classList.add('sb-sailing');
+					setTimeout(() => figure.classList.remove('sb-sailing'), 3600);
+				});
+
+				const row = document.createElement('div');
+				row.className = 'flex items-center justify-between gap-2';
+				const nm = document.createElement('span');
+				nm.className = 'truncate text-sm font-medium';
+				nm.textContent = ship.name;
+				const del = document.createElement('button');
+				del.type = 'button';
+				del.className = 'rounded-md border px-2 py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 outline-none';
+				del.textContent = 'Delete';
+				del.setAttribute('aria-label', 'Delete ' + ship.name);
+				del.addEventListener('click', () => {
+					save(load().filter((s) => s.id !== ship.id));
+					renderYard();
+				});
+				row.append(nm, del);
+				card.append(figure, row);
+				yardEl.appendChild(card);
+			});
+		}
+
+		// ---- Save handler ----
+		document.getElementById('sb-form').addEventListener('submit', (e) => {
+			e.preventDefault();
+			const result = cleanName(nameEl.value);
+			if (result.empty) {
+				msgEl.textContent = 'Every ship needs a name, captain.';
+				msgEl.className = 'min-h-4 text-xs text-destructive';
+				nameEl.focus();
+				return;
+			}
+			const ship = {
+				id: (crypto.randomUUID ? crypto.randomUUID() : 'ship-' + Date.now() + '-' + Math.random().toString(36).slice(2)),
+				name: result.name,
+				parts: { ...current.parts },
+				flagColors: [flag1.value, flag2.value],
+				sailColor: current.sailColor,
+			};
+			const ships = load();
+			ships.push(ship);
+			save(ships);
+			nameEl.value = '';
+			msgEl.textContent = result.hadProfanity
+				? '“' + result.name + '” launched — we cleaned up that salty language for you.'
+				: '“' + result.name + '” launched into the yard! ⚓';
+			msgEl.className = 'min-h-4 text-xs text-muted-foreground';
+			renderYard();
+		});
+
+		flag1.addEventListener('input', renderPreview);
+		flag2.addEventListener('input', renderPreview);
+
+		// ---- Init ----
+		buildOptions('sb-opt-hull', HULLS, 'hull');
+		buildOptions('sb-opt-mast', MASTS, 'mast');
+		buildOptions('sb-opt-figurehead', FIGUREHEADS, 'figurehead');
+		renderPreview();
+		renderYard();
+
+		// Allow re-binding after a client-router swap removes this DOM.
+		document.addEventListener('astro:before-swap', () => { root.dataset.bound = ''; }, { once: true });
+	})();
+</script>
