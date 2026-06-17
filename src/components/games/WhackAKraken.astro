@@ -15,12 +15,55 @@ import Leaderboard from './Leaderboard.astro';
 			<span>Time: <span id="wak-time" class="tabular-nums font-bold">30</span>s</span>
 		</div>
 
-		<div
-			id="wak-grid"
-			class="relative grid touch-none grid-cols-3 gap-2 rounded-xl border bg-background p-2 select-none"
-			role="grid"
-			aria-label="Whack-a-Kraken — strike the tentacles"
-		></div>
+		<div class="flex items-center justify-center text-xs font-medium text-muted-foreground">
+			<span
+				id="wak-skill-issue"
+				title="Every missed strike is, respectfully, a skill issue."
+			>skill issue: <span id="wak-skill-count" class="tabular-nums font-bold text-red-500">0</span></span>
+		</div>
+
+		<div class="relative">
+			<div
+				id="wak-grid"
+				class="relative grid touch-none grid-cols-3 gap-2 rounded-xl border bg-background p-2 select-none"
+				role="grid"
+				aria-label="Whack-a-Kraken — strike the tentacles"
+			></div>
+
+			<!-- Combo / hot-streak toast (good-natured, self-directed). -->
+			<div
+				id="wak-toast"
+				class="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border border-amber-400/60 bg-amber-100/95 px-3 py-1 text-sm font-bold text-amber-900 opacity-0 shadow-lg"
+				role="status"
+				aria-live="polite"
+			></div>
+
+			<!-- "Touch grass" rage-quit overlay, shown after 3 consecutive whiffs. -->
+			<div
+				id="wak-overlay"
+				class="absolute inset-0 z-20 hidden flex-col items-center justify-center gap-4 rounded-xl bg-background/95 p-4 text-center backdrop-blur-sm"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="wak-overlay-title"
+				aria-hidden="true"
+			>
+				<div id="wak-overlay-emoji" class="text-5xl" aria-hidden="true">🌱</div>
+				<p id="wak-overlay-title" class="text-lg font-bold">Maybe touch grass? 🌱</p>
+				<p id="wak-overlay-sub" class="max-w-xs text-sm text-muted-foreground">
+					Three whiffs in a row. The kraken sends its regards. No shame — the deep is undefeated.
+				</p>
+				<div class="flex flex-wrap items-center justify-center gap-2">
+					<button
+						id="wak-overlay-keep"
+						class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+					>Keep diving</button>
+					<button
+						id="wak-overlay-restart"
+						class="rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+					>Restart</button>
+				</div>
+			</div>
+		</div>
 
 		<div class="flex items-center justify-center gap-3">
 			<button
@@ -89,6 +132,42 @@ import Leaderboard from './Leaderboard.astro';
 		100% { background:
 			radial-gradient(circle at 50% 30%, oklch(0.42 0.07 240), oklch(0.22 0.05 250)); }
 	}
+	/* Comedic taunt sign: a tiny placard that pops up over a surfaced kraken and
+	   ducks back. Self-directed ribbing only — all copy is set from the script. */
+	#wak-grid .wak-taunt {
+		position: absolute;
+		top: 4%;
+		left: 50%;
+		z-index: 5;
+		padding: 1px 6px;
+		border-radius: 9999px;
+		border: 1px solid oklch(0.78 0.18 78 / 0.8);
+		background: oklch(0.98 0.02 95);
+		color: oklch(0.3 0.05 250);
+		font-size: 0.62rem;
+		font-weight: 700;
+		line-height: 1.3;
+		white-space: nowrap;
+		pointer-events: none;
+		transform: translate(-50%, -6px) scale(0.6);
+		opacity: 0;
+		transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease-out;
+	}
+	#wak-grid .wak-cell.is-taunting .wak-taunt {
+		transform: translate(-50%, 0) scale(1);
+		opacity: 1;
+	}
+	/* Toast slide/fade in. */
+	#wak-toast.is-shown {
+		opacity: 1;
+		transition: opacity 180ms ease-out, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+		transform: translate(-50%, 4px);
+	}
+	#wak-overlay.is-open { display: flex; }
+	@media (prefers-reduced-motion: reduce) {
+		#wak-grid .wak-taunt { transition: none; }
+		#wak-toast.is-shown { transition: opacity 1ms linear; transform: translate(-50%, 0); }
+	}
 	/* Calm, accessible mode: no sliding, no flash — just appear/disappear. */
 	@media (prefers-reduced-motion: reduce) {
 		#wak-grid .wak-tentacle {
@@ -110,10 +189,22 @@ import Leaderboard from './Leaderboard.astro';
 		const timeEl = document.getElementById('wak-time');
 		const btn = document.getElementById('wak-btn');
 		const statusEl = document.getElementById('wak-status');
+		const skillCountEl = document.getElementById('wak-skill-count');
+		const toastEl = document.getElementById('wak-toast');
+		const overlayEl = document.getElementById('wak-overlay');
+		const overlayKeepBtn = document.getElementById('wak-overlay-keep');
+		const overlayRestartBtn = document.getElementById('wak-overlay-restart');
 
 		const COLS = 3, ROWS = 3, CELLS = COLS * ROWS;
 		const GAME_SECONDS = 30;
 		const BEST_KEY = 'wak-best';
+		const MISS_LIMIT = 3;        // consecutive whiffs that trigger the overlay
+		const COMBO_THRESHOLD = 4;   // hits in a row before a hot-streak toast
+		const TAUNT_CHANCE = 0.28;   // chance a surfaced kraken flashes a taunt sign
+
+		// PG, self-directed game taunts only — no slurs, no hate, no real people.
+		const TAUNTS = ["you're mid", 'skill issue', 'too slow', 'whiff city', 'get good (kindly)'];
+		const COMBO_TOASTS = ['ate, no crumbs 🔥', 'on a heater 🔥', 'cracked 🔥', 'no notes 🔥', 'locked in 🔥'];
 
 		// Maritime tentacle art reused from the kraken easter-egg style.
 		const TENTACLE_SVG =
@@ -139,6 +230,13 @@ import Leaderboard from './Leaderboard.astro';
 		let hideTimer = null;
 		let countdownTimer = null;
 		let best = 0;
+		let missStreak = 0;     // consecutive whiffs (resets on any hit)
+		let hitStreak = 0;      // consecutive hits (resets on any whiff)
+		let skillIssues = 0;    // total whiffs this run — the "skill issue" tally
+		let nextComboAt = COMBO_THRESHOLD; // streak length for the next toast
+		let toastTimer = null;
+		let tauntTimer = null;
+		let overlayOpen = false;
 
 		try { best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch (e) {}
 		bestEl.textContent = String(best);
@@ -151,7 +249,8 @@ import Leaderboard from './Leaderboard.astro';
 				cell.type = 'button';
 				cell.className = 'wak-cell';
 				cell.setAttribute('aria-label', `Porthole ${i + 1}`);
-				cell.innerHTML = '<span class="wak-tentacle">' + TENTACLE_SVG + '</span>';
+				cell.innerHTML = '<span class="wak-tentacle">' + TENTACLE_SVG + '</span>' +
+					'<span class="wak-taunt" aria-hidden="true"></span>';
 				cell.addEventListener('pointerdown', (e) => { e.preventDefault(); strike(i); });
 				grid.appendChild(cell);
 				cells.push(cell);
@@ -168,9 +267,54 @@ import Leaderboard from './Leaderboard.astro';
 
 		function clearActive() {
 			if (active >= 0) {
-				cells[active].classList.remove('is-up');
+				cells[active].classList.remove('is-up', 'is-taunting');
 				active = -1;
 			}
+		}
+
+		// Occasionally a surfaced kraken flashes a tiny placard then ducks back.
+		function maybeTaunt(idx) {
+			clearTimeout(tauntTimer);
+			if (Math.random() > TAUNT_CHANCE) return;
+			const cell = cells[idx];
+			const sign = cell && cell.querySelector('.wak-taunt');
+			if (!sign) return;
+			sign.textContent = TAUNTS[Math.floor(Math.random() * TAUNTS.length)];
+			cell.classList.add('is-taunting');
+			// Duck the sign back under before the porthole itself hides.
+			tauntTimer = setTimeout(() => { cell.classList.remove('is-taunting'); }, 700);
+		}
+
+		function showToast(msg) {
+			if (!toastEl) return;
+			clearTimeout(toastTimer);
+			toastEl.textContent = msg;
+			toastEl.classList.add('is-shown');
+			toastTimer = setTimeout(() => { toastEl.classList.remove('is-shown'); }, 1300);
+		}
+
+		function bumpSkillIssue() {
+			skillIssues++;
+			if (skillCountEl) skillCountEl.textContent = String(skillIssues);
+		}
+
+		function openOverlay() {
+			if (!overlayEl) return;
+			overlayOpen = true;
+			overlayEl.classList.add('is-open');
+			overlayEl.setAttribute('aria-hidden', 'false');
+			// Pause spawning while the sailor considers the great outdoors.
+			clearTimeout(spawnTimer);
+			clearTimeout(hideTimer);
+			clearActive();
+			if (overlayKeepBtn) overlayKeepBtn.focus();
+		}
+
+		function closeOverlay() {
+			if (!overlayEl) return;
+			overlayOpen = false;
+			overlayEl.classList.remove('is-open');
+			overlayEl.setAttribute('aria-hidden', 'true');
 		}
 
 		function spawn() {
@@ -180,6 +324,7 @@ import Leaderboard from './Leaderboard.astro';
 			const idx = Math.floor(Math.random() * CELLS);
 			active = idx;
 			cells[idx].classList.add('is-up');
+			maybeTaunt(idx);
 			const win = currentWindow();
 			hideTimer = setTimeout(() => {
 				clearActive();
@@ -189,17 +334,41 @@ import Leaderboard from './Leaderboard.astro';
 		}
 
 		function strike(i) {
-			if (!running) return;
-			if (i !== active) return; // missed / empty porthole — no penalty, no points
-			cells[i].classList.remove('is-up');
+			if (!running || overlayOpen) return;
+			if (i !== active) {
+				// Missed / empty porthole — no points, but it's a "skill issue".
+				whiff();
+				return;
+			}
+			cells[i].classList.remove('is-up', 'is-taunting');
 			cells[i].classList.add('is-hit');
 			setTimeout(() => cells[i] && cells[i].classList.remove('is-hit'), 240);
 			active = -1;
 			score++;
 			scoreEl.textContent = String(score);
+			// A clean strike resets the whiff streak and feeds the combo meter.
+			missStreak = 0;
+			hitStreak++;
+			if (hitStreak >= nextComboAt) {
+				showToast(COMBO_TOASTS[Math.floor(Math.random() * COMBO_TOASTS.length)]);
+				nextComboAt = hitStreak + COMBO_THRESHOLD; // next toast a few hits later
+			}
 			clearTimeout(hideTimer);
 			// Immediately surface the next one for a snappy combo feel.
 			spawnTimer = setTimeout(spawn, reduceMotion ? 220 : 120);
+		}
+
+		// A whiff: a tap that hit no kraken. Counts toward the skill-issue tally
+		// and the consecutive-miss streak that triggers the "touch grass" overlay.
+		function whiff() {
+			hitStreak = 0;
+			nextComboAt = COMBO_THRESHOLD;
+			bumpSkillIssue();
+			missStreak++;
+			if (missStreak >= MISS_LIMIT) {
+				missStreak = 0;
+				openOverlay();
+			}
 		}
 
 		function tick() {
@@ -210,9 +379,16 @@ import Leaderboard from './Leaderboard.astro';
 
 		function start() {
 			stopTimers();
+			closeOverlay();
 			score = 0;
 			timeLeft = GAME_SECONDS;
 			running = true;
+			missStreak = 0;
+			hitStreak = 0;
+			skillIssues = 0;
+			nextComboAt = COMBO_THRESHOLD;
+			if (skillCountEl) skillCountEl.textContent = '0';
+			if (toastEl) toastEl.classList.remove('is-shown');
 			scoreEl.textContent = '0';
 			timeEl.textContent = String(GAME_SECONDS);
 			statusEl.textContent = 'Strike! The kraken surfaces…';
@@ -225,6 +401,7 @@ import Leaderboard from './Leaderboard.astro';
 		function finish() {
 			running = false;
 			stopTimers();
+			closeOverlay();
 			clearActive();
 			if (score > best) {
 				best = score;
@@ -243,14 +420,32 @@ import Leaderboard from './Leaderboard.astro';
 			clearTimeout(spawnTimer);
 			clearTimeout(hideTimer);
 			clearInterval(countdownTimer);
-			spawnTimer = hideTimer = countdownTimer = null;
+			clearTimeout(toastTimer);
+			clearTimeout(tauntTimer);
+			spawnTimer = hideTimer = countdownTimer = toastTimer = tauntTimer = null;
+		}
+
+		// "Keep diving" — dismiss the overlay and resume play where we left off.
+		function resumeFromOverlay() {
+			closeOverlay();
+			if (!running) return;
+			statusEl.textContent = 'Back to the brine — strike!';
+			clearTimeout(spawnTimer);
+			spawnTimer = setTimeout(spawn, reduceMotion ? 220 : 120);
 		}
 
 		btn.addEventListener('click', start);
+		if (overlayKeepBtn) overlayKeepBtn.addEventListener('click', resumeFromOverlay);
+		if (overlayRestartBtn) overlayRestartBtn.addEventListener('click', start);
 
 		// Keyboard play: number keys 1–9 strike the matching porthole.
 		document.addEventListener('keydown', (e) => {
-			if (!running) return;
+			if (overlayOpen && e.key === 'Escape') {
+				e.preventDefault();
+				resumeFromOverlay();
+				return;
+			}
+			if (!running || overlayOpen) return;
 			const n = parseInt(e.key, 10);
 			if (!Number.isNaN(n) && n >= 1 && n <= CELLS) {
 				e.preventDefault();
