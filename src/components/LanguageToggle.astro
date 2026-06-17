@@ -14,6 +14,7 @@ const languages = [
 	{ id: 'en', label: 'English', icon: 'tabler:flag' },
 	{ id: 'pirate', label: 'English (Pirate)', icon: 'tabler:skull' },
 	{ id: 'emoji', label: 'Emoji', icon: 'tabler:mood-smile' },
+	{ id: 'spoonerism', label: 'English (Spoonerism)', icon: 'tabler:arrows-shuffle' },
 ];
 
 // SSR/no-JS fallback: the active marker is reconciled by the inline script, so
@@ -59,7 +60,7 @@ const ssrDefaultLang = 'en';
 	if (!window.__langToggleBound) {
 		window.__langToggleBound = true;
 
-		var LANGS = { en: true, pirate: true, emoji: true };
+		var LANGS = { en: true, pirate: true, emoji: true, spoonerism: true };
 
 		// --- Pirate dictionary -------------------------------------------------
 		// Family-friendly, whole-word replacements. Each entry preserves the
@@ -144,6 +145,83 @@ const ssrDefaultLang = 'en';
 			});
 		}
 
+		// --- Spoonerism transform ---------------------------------------------
+		// Classic spoonerism: swap the leading consonant clusters (onsets) of
+		// adjacent eligible word pairs — "the language toggle" -> "the tanguage
+		// loggle". Operates per text node on word/non-word tokens so spacing and
+		// punctuation are preserved exactly; runs from the cached original via
+		// applyTransform, so it is fully reversible and never compounds. Words
+		// that are too short, contain no swappable onset, or are vowel-initial
+		// are left alone so output stays readable-funny rather than garbled.
+		var ONSET_RE = /^([a-z]+)/i;
+
+		// An onset is the run of consonant letters before the first vowel.
+		// Returns null when the word starts with a vowel or has no leading
+		// consonant cluster (so such words are skipped gracefully).
+		function onsetOf(word) {
+			var m = /^([^aeiou]+)([aeiou].*)?$/i.exec(word);
+			if (!m) return null;
+			var onset = m[1];
+			// Pure-consonant tokens (no following vowel) and y-only onsets are
+			// risky to swap; require an actual vowel remainder and a short,
+			// pronounceable cluster.
+			if (!m[2]) return null;
+			if (onset.length > 3) return null;
+			return { onset: onset, rest: m[2] };
+		}
+
+		// Preserve the capitalisation shape of the original word when rebuilding.
+		function reshape(original, built) {
+			if (original === original.toUpperCase() && original !== original.toLowerCase()) {
+				return built.toUpperCase();
+			}
+			if (original[0] === original[0].toUpperCase() && original[0] !== original[0].toLowerCase()) {
+				return built.charAt(0).toUpperCase() + built.slice(1).toLowerCase();
+			}
+			return built.toLowerCase();
+		}
+
+		// A token is eligible to take part in a swap only if it is a real word of
+		// reasonable length with a swappable consonant onset.
+		function eligible(word) {
+			if (!ONSET_RE.test(word)) return false; // must start with a letter
+			if (word.length < 3) return false;       // skip very short words
+			return onsetOf(word) != null;
+		}
+
+		function spoonerise(text) {
+			// Split into alternating word / separator tokens, keeping separators
+			// so we can rejoin byte-exactly.
+			var tokens = text.match(/[A-Za-z]+(?:['’][A-Za-z]+)*|[^A-Za-z]+/g);
+			if (!tokens) return text;
+
+			// Indices of pure word tokens.
+			var wordIdx = [];
+			for (var i = 0; i < tokens.length; i++) {
+				if (/^[A-Za-z]/.test(tokens[i])) wordIdx.push(i);
+			}
+
+			// Walk adjacent eligible word pairs and swap their onsets. Advance by
+			// two on a successful swap so each word participates in at most one
+			// swap, mirroring how a person reads a phrase.
+			for (var w = 0; w + 1 < wordIdx.length; ) {
+				var aI = wordIdx[w], bI = wordIdx[w + 1];
+				var a = tokens[aI], b = tokens[bI];
+				if (eligible(a) && eligible(b)) {
+					var oa = onsetOf(a), ob = onsetOf(b);
+					// Only swap when it actually changes something readable.
+					if (oa.onset.toLowerCase() !== ob.onset.toLowerCase()) {
+						tokens[aI] = reshape(a, ob.onset + oa.rest);
+						tokens[bI] = reshape(b, oa.onset + ob.rest);
+						w += 2;
+						continue;
+					}
+				}
+				w += 1;
+			}
+			return tokens.join('');
+		}
+
 		// --- Text-node walking -------------------------------------------------
 		var SKIP_TAGS = { CODE: 1, PRE: 1, INPUT: 1, TEXTAREA: 1, SCRIPT: 1, STYLE: 1, KBD: 1, SAMP: 1 };
 
@@ -211,6 +289,7 @@ const ssrDefaultLang = 'en';
 			document.documentElement.setAttribute('data-lang', id);
 			if (id === 'pirate') applyTransform(piratify);
 			else if (id === 'emoji') applyTransform(emojify);
+			else if (id === 'spoonerism') applyTransform(spoonerise);
 			else restoreEnglish();
 			syncChecks();
 		}
