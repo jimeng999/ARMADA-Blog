@@ -1,0 +1,333 @@
+---
+/**
+ * "Rate My Shanty" judge parrot — a comedic, 100% client-side gag.
+ *
+ * --- What this is ----------------------------------------------------------
+ * The /shanties page is a static list of preview links; there is no real audio
+ * player and nothing is streamed here. This component adds a tongue-in-cheek
+ * "judge" experience: each song gets a "Rate my take" button that runs a tiny
+ * pretend "playthrough" (a short progress bar — no audio, no network) and, when
+ * that pretend track FINISHES, a parrot pops up with a MADE-UP 0–10 doubloon
+ * score and a canned one-liner.
+ *
+ * CRITICAL — this is a CANNED GAG, not real feedback:
+ *   - NO AI / LLM, NO external API, NO backend, NO API keys.
+ *   - NO real audio analysis — nothing is recorded, fetched, or sent anywhere.
+ *   - Scores are fabricated client-side (Math.random "vibes"); one-liners are
+ *     pre-written and chosen at random with no back-to-back repeats.
+ *   - One-liners are PG, good-natured "landlubber karaoke" energy. A "villain
+ *     era" toggle swaps in a meaner-but-still-PG set. No slurs, no hate, no
+ *     real-person targeting.
+ *   - All dynamic text is set via textContent (never innerHTML).
+ *   - A perfect 10 fires doubloon confetti; prefers-reduced-motion is honoured
+ *     (no slide/confetti — the parrot just appears).
+ *
+ * The hook for "track finished": the per-song button dispatches a custom
+ * `shanty:finished` CustomEvent (with the song title) after the pretend
+ * playthrough; the parrot listens for that event. This keeps the "finish"
+ * trigger decoupled and leaves the existing Preview links untouched.
+ * --------------------------------------------------------------------------- */
+---
+
+<div
+	id="judge-parrot"
+	class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4"
+	data-open="false"
+	hidden
+>
+	<div
+		role="status"
+		aria-live="polite"
+		class="parrot-card pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border border-primary/40 bg-card/95 p-4 shadow-lg backdrop-blur"
+	>
+		<div class="parrot-avatar shrink-0 text-4xl leading-none" aria-hidden="true">🦜</div>
+		<div class="min-w-0 flex-1">
+			<div class="flex items-center justify-between gap-2">
+				<p class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+					Cap'n Squawk, shanty judge
+				</p>
+				<button
+					id="judge-close"
+					type="button"
+					class="-mt-1 -mr-1 rounded p-1 text-muted-foreground hover:text-foreground"
+					aria-label="Dismiss the judge"
+				>✕</button>
+			</div>
+			<p class="mt-0.5 truncate text-sm font-medium" id="judge-song">&nbsp;</p>
+			<p class="mt-1 text-lg font-bold text-primary" id="judge-score" aria-label="score">&nbsp;</p>
+			<p class="mt-1 text-sm text-foreground" id="judge-line">&nbsp;</p>
+			<p class="mt-2 text-[11px] text-muted-foreground">
+				Made-up score, just for fun — no real audio is judged.
+			</p>
+		</div>
+	</div>
+</div>
+
+<style is:global>
+	/* Pop / dismiss animation for the judge card, plus the confetti pieces that
+	   are created at runtime (so they need global, namespaced rules). Everything
+	   is namespaced under #judge-parrot so it stays isolated to this island. */
+	#judge-parrot {
+		opacity: 0;
+		transform: translateY(16px);
+		transition: opacity 220ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	#judge-parrot[data-open='true'] {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	#judge-parrot[data-open='true'] .parrot-avatar {
+		animation: judge-bob 1.6s ease-in-out infinite;
+	}
+	@keyframes judge-bob {
+		0%, 100% { transform: translateY(0) rotate(-3deg); }
+		50% { transform: translateY(-3px) rotate(3deg); }
+	}
+
+	/* Confetti: a fixed full-screen overlay; pieces are spawned by the script. */
+	#judge-confetti {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		pointer-events: none;
+		overflow: hidden;
+	}
+	#judge-confetti .doubloon {
+		position: absolute;
+		top: -24px;
+		font-size: 20px;
+		line-height: 1;
+		will-change: transform, opacity;
+		animation: judge-fall linear forwards;
+	}
+	@keyframes judge-fall {
+		0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+		100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
+	}
+
+	/* The per-song "Rate my take" button injected onto each card. */
+	.shanty-rate-btn[data-busy='true'] { opacity: 0.7; cursor: progress; }
+
+	@media (prefers-reduced-motion: reduce) {
+		#judge-parrot {
+			transition: none;
+			transform: none;
+		}
+		#judge-parrot[data-open='true'] .parrot-avatar { animation: none; }
+		#judge-confetti { display: none; }
+	}
+</style>
+
+<script is:inline>
+	(() => {
+		const panel = document.getElementById('judge-parrot');
+		if (!panel) return;
+
+		const songEl = document.getElementById('judge-song');
+		const scoreEl = document.getElementById('judge-score');
+		const lineEl = document.getElementById('judge-line');
+		const closeBtn = document.getElementById('judge-close');
+
+		const reduceMotion = window.matchMedia
+			? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+			: false;
+
+		// --- Canned one-liners (pre-written, PG, no real-person targeting) -----
+		// "nice" = good-natured landlubber-karaoke energy.
+		const NICE = [
+			'Arrr, the gulls stayed. That be a passing grade.',
+			'Ye hit most of the notes the tune was aiming for!',
+			'Fair winds and a fair tune — the crew be tappin a boot.',
+			'Bit pitchy round the chorus, but ye sold it with heart.',
+			'That be a respectable bilge-bucket of a performance.',
+			'The parrot approves. The parrot rarely approves.',
+			'Solid haul! Ye could lead the capstan with that one.',
+			'A touch wobbly, but a wobble at sea is just rhythm.',
+			'Ye made the timbers shiver — in the good way.',
+			'Honest work. The tavern would buy ye half an ale.',
+			'Almost made me forget I be only a parrot. Almost.',
+			'That chorus could launch a dinghy. Well sung, matey!',
+			'Not bad for a landlubber — the sea heard ye.',
+			'A hearty effort! Even the barnacles were humming.',
+		];
+		// "villain era" = meaner, still PG, still good-natured roast (no slurs,
+		// no hate, no real people).
+		const VILLAIN = [
+			'I have heard cleaner notes from a creaky mast.',
+			'The gulls have filed a formal complaint.',
+			'That were a shanty the way a puddle be an ocean.',
+			'Walk the plank — gently — and try the chorus again.',
+			'I have judged barnacles with more rhythm than that.',
+			'The parrot is not angry. The parrot is disappointed.',
+			'Ye sang it. That be the kindest thing I can say.',
+			'Even the kraken plugged its many ears, matey.',
+			'A brave attempt to befriend the wrong key entirely.',
+			'That be more shanty-adjacent than actual shanty.',
+			'The tide went out. I think it were avoiding ye.',
+			'Bold of ye to do that to a perfectly good tune.',
+			'I have heard rope sing sweeter when it snaps.',
+			'Keep yer day job ashore, brave landlubber.',
+		];
+
+		let lastNice = -1;
+		let lastVillain = -1;
+
+		// Pick an index that is not the same as the last one shown for this set.
+		function pickLine(pool, lastIdx) {
+			if (pool.length <= 1) return 0;
+			let idx;
+			do {
+				idx = Math.floor(Math.random() * pool.length);
+			} while (idx === lastIdx);
+			return idx;
+		}
+
+		function villainOn() {
+			return !!(window.localStorage && localStorage.getItem('shanty-villain') === '1');
+		}
+
+		// Fully made-up score (client-side vibes only — no audio is analysed).
+		// Biased toward 4–10 so it stays fun, with a real shot at a perfect 10.
+		function fakeScore() {
+			const roll = Math.random();
+			if (roll < 0.08) return 10;            // ~8% perfect ten → confetti
+			if (roll < 0.2) return 3 + Math.floor(Math.random() * 3); // 3–5, a roast
+			return 6 + Math.floor(Math.random() * 4); // 6–9, the common case
+		}
+
+		function doubloons(n) {
+			// e.g. "8 / 10 doubloons" — plain text, set via textContent.
+			return n + ' / 10 doubloons';
+		}
+
+		let hideTimer = null;
+
+		function show(songTitle) {
+			const villain = villainOn();
+			const pool = villain ? VILLAIN : NICE;
+			const lastIdx = villain ? lastVillain : lastNice;
+			const idx = pickLine(pool, lastIdx);
+			if (villain) lastVillain = idx; else lastNice = idx;
+
+			const score = fakeScore();
+
+			songEl.textContent = songTitle ? '“' + songTitle + '”' : 'Your shanty';
+			scoreEl.textContent = doubloons(score);
+			lineEl.textContent = pool[idx];
+
+			panel.hidden = false;
+			// Force a reflow so the transition runs even right after un-hiding.
+			void panel.offsetWidth;
+			panel.setAttribute('data-open', 'true');
+
+			if (score === 10) celebrate();
+
+			clearTimeout(hideTimer);
+			hideTimer = setTimeout(hide, 7000);
+		}
+
+		function hide() {
+			panel.setAttribute('data-open', 'false');
+			clearTimeout(hideTimer);
+			// Hide after the transition so screen readers don't re-announce.
+			setTimeout(() => { if (panel.getAttribute('data-open') === 'false') panel.hidden = true; }, 260);
+		}
+
+		// Doubloon confetti for a perfect 10 (skipped under reduced motion).
+		function celebrate() {
+			if (reduceMotion) return;
+			let layer = document.getElementById('judge-confetti');
+			if (!layer) {
+				layer = document.createElement('div');
+				layer.id = 'judge-confetti';
+				layer.setAttribute('aria-hidden', 'true');
+				document.body.appendChild(layer);
+			}
+			const COINS = 28;
+			for (let i = 0; i < COINS; i++) {
+				const coin = document.createElement('span');
+				coin.className = 'doubloon';
+				coin.textContent = Math.random() < 0.5 ? '🪙' : '💰';
+				coin.style.left = Math.random() * 100 + 'vw';
+				const dur = 1.6 + Math.random() * 1.4;
+				coin.style.animationDuration = dur + 's';
+				coin.style.animationDelay = (Math.random() * 0.4) + 's';
+				layer.appendChild(coin);
+				setTimeout(() => coin.remove(), (dur + 0.6) * 1000);
+			}
+		}
+
+		// "Track finished" hook: listen for a custom event from the per-song
+		// pretend-playthrough buttons (see below). Decoupled so the parrot does
+		// not care how the "finish" happened.
+		document.addEventListener('shanty:finished', (e) => {
+			const title = e && e.detail && e.detail.title ? String(e.detail.title) : '';
+			show(title);
+		});
+
+		closeBtn.addEventListener('click', hide);
+
+		// --- Wire up the per-song "Rate my take" buttons ----------------------
+		// Each shanty card gets a button that runs a tiny pretend playthrough (a
+		// progress fill, no audio) and then dispatches `shanty:finished`. This is
+		// the comedic stand-in for a real player's "ended" event.
+		const PLAY_MS = reduceMotion ? 600 : 1500;
+
+		document.querySelectorAll('[data-shanty-rate]').forEach((btn) => {
+			const title = btn.getAttribute('data-shanty-title') || '';
+			const bar = btn.parentElement
+				? btn.parentElement.querySelector('[data-shanty-progress]')
+				: null;
+			const fill = bar ? bar.querySelector('[data-shanty-fill]') : null;
+			const defaultLabel = btn.textContent;
+
+			btn.addEventListener('click', () => {
+				if (btn.getAttribute('data-busy') === 'true') return;
+				btn.setAttribute('data-busy', 'true');
+				btn.disabled = true;
+				btn.textContent = 'Judging…';
+				if (bar) bar.hidden = false;
+				if (fill) {
+					fill.style.transition = 'none';
+					fill.style.width = '0%';
+					void fill.offsetWidth;
+					fill.style.transition = 'width ' + PLAY_MS + 'ms linear';
+					fill.style.width = '100%';
+				}
+				setTimeout(() => {
+					btn.removeAttribute('data-busy');
+					btn.disabled = false;
+					btn.textContent = defaultLabel;
+					if (bar) bar.hidden = true;
+					if (fill) { fill.style.transition = 'none'; fill.style.width = '0%'; }
+					document.dispatchEvent(
+						new CustomEvent('shanty:finished', { detail: { title } })
+					);
+				}, PLAY_MS);
+			});
+		});
+
+		// Villain-era toggle.
+		const villainToggle = document.getElementById('shanty-villain-toggle');
+		if (villainToggle) {
+			const sync = () => {
+				const on = villainOn();
+				villainToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+				villainToggle.textContent = on ? 'Villain era: ON 🏴‍☠️' : 'Villain era: off';
+			};
+			villainToggle.addEventListener('click', () => {
+				const next = villainOn() ? '0' : '1';
+				try { localStorage.setItem('shanty-villain', next); } catch (e) {}
+				sync();
+			});
+			sync();
+		}
+
+		// Clean up on Astro route swaps so the confetti layer doesn't leak.
+		document.addEventListener('astro:before-swap', () => {
+			clearTimeout(hideTimer);
+			const layer = document.getElementById('judge-confetti');
+			if (layer) layer.remove();
+		}, { once: true });
+	})();
+</script>
