@@ -34,11 +34,16 @@ import GameShell from './GameShell.astro';
 	</div>
 </GameShell>
 
-<style>
-	/* Each cell is a porthole; the tentacle hides below the waterline and rises
-	   when active. prefers-reduced-motion swaps the transition for an instant
-	   show/hide so nothing slides or pulses. */
-	.wak-cell {
+<style is:global>
+	/* The cells and tentacles inside #wak-grid are created at runtime by the
+	   inline script below, so they never receive Astro's scoped-style data
+	   attribute — a scoped <style> block would not match them and every porthole
+	   would render its tentacle permanently (issue #60). These rules are
+	   therefore global, but namespaced under #wak-grid so they stay isolated to
+	   this game. Each cell is a porthole; the tentacle hides below the waterline
+	   and rises when active. prefers-reduced-motion swaps the transition for an
+	   instant show/hide so nothing slides or pulses. */
+	#wak-grid .wak-cell {
 		position: relative;
 		aspect-ratio: 1 / 1;
 		overflow: hidden;
@@ -48,11 +53,11 @@ import GameShell from './GameShell.astro';
 			radial-gradient(circle at 50% 30%, oklch(0.42 0.07 240), oklch(0.22 0.05 250));
 		cursor: pointer;
 	}
-	.wak-cell:focus-visible {
+	#wak-grid .wak-cell:focus-visible {
 		outline: 2px solid oklch(0.78 0.18 78);
 		outline-offset: 2px;
 	}
-	.wak-tentacle {
+	#wak-grid .wak-tentacle {
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -63,13 +68,13 @@ import GameShell from './GameShell.astro';
 		transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
 		will-change: transform;
 	}
-	.wak-cell.is-up .wak-tentacle {
+	#wak-grid .wak-cell.is-up .wak-tentacle {
 		transform: translateY(0%);
 	}
-	.wak-cell.is-hit {
+	#wak-grid .wak-cell.is-hit {
 		animation: wak-flash 220ms ease-out;
 	}
-	.wak-tentacle svg {
+	#wak-grid .wak-tentacle svg {
 		width: 78%;
 		height: 90%;
 	}
@@ -81,13 +86,13 @@ import GameShell from './GameShell.astro';
 	}
 	/* Calm, accessible mode: no sliding, no flash — just appear/disappear. */
 	@media (prefers-reduced-motion: reduce) {
-		.wak-tentacle {
+		#wak-grid .wak-tentacle {
 			transition: none;
 			transform: translateY(0%);
 			opacity: 0;
 		}
-		.wak-cell.is-up .wak-tentacle { opacity: 1; }
-		.wak-cell.is-hit { animation: none; }
+		#wak-grid .wak-cell.is-up .wak-tentacle { opacity: 1; }
+		#wak-grid .wak-cell.is-hit { animation: none; }
 	}
 </style>
 
