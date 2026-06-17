@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import { getConfig } from '../lib/data';
+import PlunderCatalogue from '../components/plunder/PlunderCatalogue.astro';
+
+const config = (await getConfig()).data?.config ?? null;
+---
+
+<Base
+	title={`Polly's Plunder · ${config?.seo?.title ?? 'TinaCMS + Astro'}`}
+	description="Polly's Plunder — a browse-only, all-for-fun market of parrot apparel & accessories. No checkout, no payments, no real doubloons charged."
+>
+	<main class="mx-auto max-w-6xl px-6 py-12">
+		<header class="mb-8 flex flex-col gap-3">
+			<h1 class="text-4xl font-semibold tracking-tight">Polly's Plunder 🦜</h1>
+			<p class="max-w-2xl text-muted-foreground">
+				Welcome to the finest pretend market on the seven seas — a window-shopping
+				bazaar of feathered finery, perch wear, trinkets and crew bundles for the
+				discerning parrot. Browse the ranges, fill yer booty sack and dream of the
+				high life. It's all in good fun: <em>no real checkout, no payments, no
+				doubloons charged</em> — your sack lives only in this browser.
+			</p>
+		</header>
+
+		<PlunderCatalogue />
+	</main>
+</Base>
