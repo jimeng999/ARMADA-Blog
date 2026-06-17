@@ -1,0 +1,278 @@
+---
+import Base from '../layouts/Base.astro';
+import { getConfig } from '../lib/data';
+
+const config = (await getConfig()).data?.config ?? null;
+
+// --- Parody fundraiser data (all fictional, all static) ---------------------
+// Invented parody brand — explicitly NOT GoFundMe's name, wordmark, or logo.
+const brand = 'PlunderRaiser';
+
+const goal = 8400; // doubloons
+const raised = 252; // a heartbreaking ~3% raised — the despair is the point
+const pct = Math.round((raised / goal) * 100);
+
+const tiers = [
+	{
+		pledge: '5 doubloons',
+		reward: 'A heartfelt "ye be a legend" muttered into the wind.',
+	},
+	{
+		pledge: '25 doubloons',
+		reward: 'Your name carved into a less important part of the ship.',
+	},
+	{
+		pledge: '100 doubloons',
+		reward:
+			'One (1) splinter from the OLD leg, mounted and framed — "before" memorabilia.',
+	},
+	{
+		pledge: '500 doubloons',
+		reward:
+			'Larry will personally kick a barrel over with the new leg in your honour.',
+	},
+	{
+		pledge: '1,000 doubloons',
+		reward:
+			'The leg gets a small engraved plaque bearing your name. You are now load-bearing in spirit.',
+	},
+	{
+		pledge: '8,400 doubloons',
+		reward:
+			'The full leg. Mahogany. Bedazzled. Genuine Corinthian leather. You attend the unveiling and the leg is dedicated to you forever — legally meaningless but emotionally binding.',
+	},
+];
+
+const donors = [
+	{ name: 'Blackbeard_Official', amount: '50 doubloons', note: 'peg solidarity 🦜' },
+	{
+		name: 'mermaid_karen',
+		amount: '15 doubloons',
+		note: 'he splashed me once but I forgive him',
+	},
+	{
+		name: 'Anonymous Buccaneer',
+		amount: '200 doubloons',
+		note: 'the mop deserved better, and so does Larry',
+	},
+	{
+		name: "Cap'n Vibes",
+		amount: '5 doubloons',
+		note: 'broke rn but spiritually I gave thousands',
+	},
+];
+---
+
+<Base
+	title={`Help One-Leg Larry Stand · ${config?.seo?.title ?? 'TinaCMS + Astro'}`}
+	description="A static PARODY crowdfunding page for the fictional pirate One-Leg Larry. No real money, no donations accepted — comedic content only."
+>
+	<main class="mx-auto max-w-5xl px-6 py-12">
+		<!-- PERSISTENT, prominent parody banner -->
+		<div
+			role="alert"
+			class="sticky top-2 z-20 mb-8 rounded-lg border-2 border-amber-500 bg-amber-100 px-4 py-3 text-center text-sm font-bold text-amber-900 shadow-md dark:border-amber-400 dark:bg-amber-950 dark:text-amber-200"
+		>
+			⚠️ PARODY — not real, no donations accepted. This be a jest: no money,
+			no payments, no doubloons taken.
+		</div>
+
+		<!-- Hero -->
+		<header class="mb-10 flex flex-col gap-4">
+			<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+				{brand} · a parody fundraiser (not affiliated with any real crowdfunding service)
+			</p>
+			<h1 class="text-4xl font-semibold tracking-tight md:text-5xl">
+				Help One-Leg Larry Stand On Something That Isn't Garbage 🦜
+			</h1>
+			<p class="max-w-3xl text-lg text-muted-foreground">
+				Organised by <strong>The Crew of the Soggy Magnificent</strong>. A
+				fictional, comedic, definitely-not-real fundraiser to upgrade Larry's
+				peg leg from "sad damp dowel" to rich mahogany, hand-bedazzled and
+				wrapped in genuine Corinthian leather.
+			</p>
+		</header>
+
+		<div class="grid gap-8 md:grid-cols-3">
+			<!-- Story column -->
+			<section class="md:col-span-2 flex flex-col gap-6">
+				<!-- "Before" hero placeholder (decorative, no real image needed) -->
+				<div
+					class="flex aspect-[16/9] w-full items-center justify-center rounded-xl border bg-card text-center"
+					aria-label="The current peg leg, in all its splintered shame"
+				>
+					<div class="px-6">
+						<div class="text-6xl">🦵🪵</div>
+						<p class="mt-2 text-sm text-muted-foreground">
+							The current peg leg, in all its splintered shame.
+							<br />(Originally a chair leg. Sheds ~1 splinter per step. "Moody.")
+						</p>
+					</div>
+				</div>
+
+				<article class="prose prose-stone max-w-none dark:prose-invert">
+					<h2>Larry's story</h2>
+					<p>
+						Larry lost the leg to a shark he insists "started it." What he got
+						in return was a chair leg — and not even the good chair. It has been
+						in active service since <strong>2011</strong>. Before that it was a
+						different, sturdier chair. It now sheds approximately one splinter
+						per step and has developed a personality the crew describes,
+						charitably, as "moody."
+					</p>
+					<p>
+						During the last boarding action it snapped clean through. Larry
+						fought the remaining two minutes of the engagement balanced on a
+						<strong>mop</strong>. The mop did its best. The mop is gone now. We
+						do not speak of the mop incident, except constantly.
+					</p>
+					<p>
+						This cannot continue. The man deserves leather. Not just any
+						leather — genuine <strong>Corinthian leather</strong>, so smooth a
+						seagull once tried to nest in a sample of it. We dream of mahogany,
+						hand-bedazzled and upholstered in that same fine Corinthian leather,
+						a leg worthy of a pirate who has stood on garbage long enough.
+					</p>
+					<p>
+						We're not asking for much. We're asking for everything, gently but
+						firmly. Larry has carried this crew on one and a half legs for
+						years. Surely the briny deep can spare a doubloon or two for a man,
+						a dream, and an unreasonable quantity of Corinthian leather.
+					</p>
+				</article>
+			</section>
+
+			<!-- Progress + tiers column -->
+			<aside class="flex flex-col gap-6">
+				<!-- FAKE progress bar -->
+				<div class="rounded-xl border bg-card p-5">
+					<p class="text-2xl font-bold">
+						<span id="larry-raised" data-raised={raised} data-goal={goal}></span>
+					</p>
+					<p class="text-sm text-muted-foreground">raised of the goal</p>
+					<div
+						class="mt-3 h-3 w-full overflow-hidden rounded-full bg-muted"
+						role="progressbar"
+						aria-valuenow={pct}
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-label="Fundraising progress (parody, decorative)"
+					>
+						<div
+							class="h-full rounded-full bg-amber-500"
+							style={`width: ${pct}%`}
+						>
+						</div>
+					</div>
+					<p class="mt-2 text-xs text-muted-foreground">
+						<span id="larry-pct" data-pct={pct}></span> raised. The bar does
+						not move. The despair is the point.
+					</p>
+					<button
+						type="button"
+						class="larry-donate mt-4 w-full cursor-not-allowed rounded-lg bg-amber-500 px-4 py-2 font-semibold text-amber-950 opacity-90 transition hover:opacity-100"
+						aria-disabled="true"
+					>
+						Donate (a jest)
+					</button>
+					<p
+						class="larry-donate-msg mt-2 hidden text-center text-sm font-medium text-amber-700 dark:text-amber-300"
+						role="status"
+						aria-live="polite"
+					>
+					</p>
+					<p class="mt-2 text-center text-xs text-muted-foreground">
+						No payment fields. No checkout. No external links. Naught but a jest.
+					</p>
+				</div>
+
+				<!-- Recent (fake) donors -->
+				<div class="rounded-xl border bg-card p-5">
+					<h2 class="mb-3 text-lg font-semibold">Recent (pretend) supporters</h2>
+					<ul class="flex flex-col gap-3 text-sm">
+						{donors.map((d) => (
+							<li class="border-b pb-2 last:border-0 last:pb-0">
+								<p class="font-semibold">{d.name} · {d.amount}</p>
+								<p class="text-muted-foreground">"{d.note}"</p>
+							</li>
+						))}
+					</ul>
+				</div>
+			</aside>
+		</div>
+
+		<!-- Donation tiers -->
+		<section class="mt-12">
+			<h2 class="mb-4 text-2xl font-semibold tracking-tight">
+				Pledge tiers (none of which take real money)
+			</h2>
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{tiers.map((t) => (
+					<div class="flex flex-col rounded-xl border bg-card p-5">
+						<p class="text-lg font-bold text-amber-600 dark:text-amber-400">{t.pledge}</p>
+						<p class="mt-2 flex-1 text-sm text-muted-foreground">{t.reward}</p>
+						<button
+							type="button"
+							class="larry-donate mt-4 w-full cursor-not-allowed rounded-lg border border-amber-500 px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950"
+							aria-disabled="true"
+						>
+							Pledge (jest only)
+						</button>
+						<p
+							class="larry-donate-msg mt-2 hidden text-center text-xs font-medium text-amber-700 dark:text-amber-300"
+							role="status"
+							aria-live="polite"
+						>
+						</p>
+					</div>
+				))}
+			</div>
+		</section>
+
+		<!-- Footer disclaimer -->
+		<footer class="mt-12 rounded-xl border-2 border-amber-500 bg-amber-50 p-5 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+			<p class="font-bold">PARODY — not a real fundraiser.</p>
+			<p class="mt-1">
+				This is a satirical, static mockup for entertainment only. {brand} is an
+				invented parody brand and is <strong>not affiliated with GoFundMe</strong>
+				or any real crowdfunding service, and does not use their name, wordmark
+				or logo. It collects no money, processes no payments, and has no backend.
+				One-Leg Larry, the shark, the mop and Larry's dignity are works of
+				fiction. No currency, cryptocurrency or treasure was moved.
+			</p>
+		</footer>
+	</main>
+</Base>
+
+<script>
+	// Non-functional donate buttons: comedic inline message only.
+	// Dynamic text rendered via textContent (no innerHTML).
+	const jests = [
+		'this be a jest — no doubloons taken.',
+		'arr, no money changes hands here. Larry says thanks anyway.',
+		'pretend pledge logged in spirit only. No real coin moved.',
+		'ye generosity is noted by the wind, and nowhere else.',
+	];
+
+	document.querySelectorAll('.larry-donate').forEach((btn) => {
+		btn.addEventListener('click', () => {
+			const msg = btn.parentElement?.querySelector('.larry-donate-msg');
+			if (!(msg instanceof HTMLElement)) return;
+			const pick = jests[Math.floor(Math.random() * jests.length)] ?? jests[0];
+			msg.textContent = pick;
+			msg.classList.remove('hidden');
+		});
+	});
+
+	// Render the (fake) progress numbers via textContent.
+	const raisedEl = document.getElementById('larry-raised');
+	if (raisedEl instanceof HTMLElement) {
+		const r = raisedEl.dataset.raised ?? '0';
+		const g = raisedEl.dataset.goal ?? '0';
+		raisedEl.textContent = `${r} / ${g} doubloons`;
+	}
+	const pctEl = document.getElementById('larry-pct');
+	if (pctEl instanceof HTMLElement) {
+		pctEl.textContent = `${pctEl.dataset.pct ?? '0'}%`;
+	}
+</script>
