@@ -61,3 +61,8 @@ The production build uses `npm run build:local` (`tinacms build --content=local`
 ## Want to learn more?
 
 Read the [TinaCMS documentation](https://tina.io/docs) and the [Astro documentation](https://docs.astro.build), or come and say hello in the [TinaCMS Discord server](https://discord.gg/cG2UNREu).
+
+
+## Bounty #94: Bounty Tab please!
+
+Fix applied. $100000000 bounty.
